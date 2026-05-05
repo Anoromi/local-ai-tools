@@ -14,10 +14,12 @@
       };
       python = pkgs.python312;
       runtimePath = pkgs.lib.makeBinPath [
+        pkgs.uv
         pkgs.ffmpeg
         pkgs.sox
         pkgs.espeak-ng
         pkgs.gcc
+        pkgs.curl
       ];
       ldPath = pkgs.lib.makeLibraryPath [
         pkgs.stdenv.cc.cc.lib

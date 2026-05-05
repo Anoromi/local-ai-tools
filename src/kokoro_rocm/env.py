@@ -10,24 +10,78 @@ DEFAULT_VOICES_DIR = "/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/voices/v
 DEFAULT_PYTHON = "/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python"
 
 
+def default_data_dir() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "kokoro-rocm"
+
+
+def config_env_file() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "kokoro-rocm" / "env"
+
+
+def user_env_file(data_dir: Path | None = None) -> Path:
+    return (data_dir or default_data_dir()) / "env"
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def discovered_env() -> tuple[Path | None, dict[str, str]]:
+    for path in [config_env_file(), user_env_file()]:
+        values = load_env_file(path)
+        if values:
+            return path, values
+    return None, {}
+
+
+def configured_value(name: str, fallback: str) -> str:
+    if os.environ.get(name) and os.environ[name] != fallback:
+        return os.environ[name]
+    _path, values = discovered_env()
+    return values.get(name, fallback)
+
+
+def effective_config() -> dict[str, str]:
+    env_file, values = discovered_env()
+    keys = {
+        "KOKORO_ROCM_PYTHON": DEFAULT_PYTHON,
+        "KOKORO_ROCM_MODEL": DEFAULT_MODEL,
+        "KOKORO_ROCM_CONFIG": DEFAULT_CONFIG,
+        "KOKORO_ROCM_VOICES_DIR": DEFAULT_VOICES_DIR,
+        "KOKORO_ROCM_DEFAULT_VOICE": "af_sarah",
+    }
+    result = {key: os.environ.get(key) or values.get(key) or fallback for key, fallback in keys.items()}
+    result["KOKORO_ROCM_ENV_FILE"] = str(env_file) if env_file else ""
+    return result
+
+
 def backend_python() -> Path:
-    return Path(os.environ.get("KOKORO_ROCM_PYTHON", DEFAULT_PYTHON))
+    return Path(configured_value("KOKORO_ROCM_PYTHON", DEFAULT_PYTHON))
 
 
 def model_path() -> Path:
-    return Path(os.environ.get("KOKORO_ROCM_MODEL", DEFAULT_MODEL))
+    return Path(configured_value("KOKORO_ROCM_MODEL", DEFAULT_MODEL))
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("KOKORO_ROCM_CONFIG", DEFAULT_CONFIG))
+    return Path(configured_value("KOKORO_ROCM_CONFIG", DEFAULT_CONFIG))
 
 
 def voices_dir() -> Path:
-    return Path(os.environ.get("KOKORO_ROCM_VOICES_DIR", DEFAULT_VOICES_DIR))
+    return Path(configured_value("KOKORO_ROCM_VOICES_DIR", DEFAULT_VOICES_DIR))
 
 
 def default_voice() -> str:
-    return os.environ.get("KOKORO_ROCM_DEFAULT_VOICE", "af_sarah")
+    return configured_value("KOKORO_ROCM_DEFAULT_VOICE", "af_sarah")
 
 
 def voice_path(voice: str) -> Path:
@@ -39,6 +93,9 @@ def voice_path(voice: str) -> Path:
 
 def rocm_env() -> dict[str, str]:
     env = os.environ.copy()
+    _path, values = discovered_env()
+    for key, value in values.items():
+        env.setdefault(key, value)
     env.setdefault("HIP_VISIBLE_DEVICES", "0")
     env.setdefault("ROCR_VISIBLE_DEVICES", "0")
     env.setdefault("PYTORCH_ROCM_ARCH", "gfx1151")

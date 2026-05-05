@@ -18,6 +18,8 @@ EXIT_DAEMON = 2
 EXIT_SYNTHESIS = 3
 EXIT_WRITE = 4
 EXIT_PROTOCOL = 5
+EXIT_SETUP = 6
+EXIT_HEALTH = 7
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +38,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     stop = sub.add_parser("stop")
     stop.add_argument("--socket")
+
+    setup = sub.add_parser("setup")
+    setup.add_argument("--torch", choices=["rocm6.4", "rocm6.3", "cpu", "existing"], default="rocm6.4")
+    setup.add_argument("--python", default="3.12")
+    setup.add_argument("--python-path")
+    setup.add_argument("--data-dir")
+    setup.add_argument("--voice", default=env.default_voice())
+    setup.add_argument("--force", action="store_true")
+    setup.add_argument("--no-download", action="store_true")
+    setup.add_argument("--model-url")
+    setup.add_argument("--config-url")
+    setup.add_argument("--voice-url")
+
+    health = sub.add_parser("health")
+    health.add_argument("--json", action="store_true")
+    health.add_argument("--output")
+    health.add_argument("--probe-synthesis", action="store_true")
+    health.add_argument("--keep-probe-output", action="store_true")
+    health.add_argument("--socket")
 
     add_say_args(parser)
     return parser
@@ -62,6 +83,14 @@ def main(argv: list[str] | None = None) -> int:
         return status(args.socket)
     if command == "stop":
         return stop(args.socket)
+    if command == "setup":
+        from .setup import run_setup
+
+        return run_setup(args)
+    if command == "health":
+        from .health import run_health
+
+        return run_health(args)
     if command == "say":
         return say(args)
     parser.print_help(sys.stderr)
@@ -166,7 +195,7 @@ def cleanup_stale_socket(sock: str | None = None) -> None:
 def start_daemon(sock: str | None = None) -> None:
     python = env.backend_python()
     if not python.exists():
-        raise RuntimeError(f"backend Python is missing: {python}")
+        raise RuntimeError(f"backend Python is missing: {python}. Run: kokoro-rocm setup")
     pid_file = pid_path()
     log = log_path()
     log.parent.mkdir(parents=True, exist_ok=True)
