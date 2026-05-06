@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeDaemonLine, decodeSessionLine, eventLine } from "../src/protocol/encode"
-import { decodeSynthesizeParams } from "../src/protocol/schema"
+import { decodeDaemonLine, decodeSessionLine, decodeSynthesizeParams, eventLine } from "@anoromi/kokoro-rocm-protocol"
 
 describe("protocol schemas", () => {
   test("valid synthesize request decodes", () => {

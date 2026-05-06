@@ -6,6 +6,19 @@ stays responsible for Kokoro, PyTorch, ROCm setup, health probes, and the daemon
 The CLI reads text from stdin, auto-starts the daemon if needed, and writes a WAV
 plus a timing JSON sidecar.
 
+This repository is a Turbo monorepo:
+
+```text
+apps/cli                 TypeScript/Bun CLI
+packages/protocol        reusable Effect Schema protocol package
+python                   Kokoro/PyTorch daemon, setup, and health implementation
+```
+
+The protocol package is named `@anoromi/kokoro-rocm-protocol`. It is structured
+so editor extensions and other clients can reuse the daemon and session schemas
+without importing CLI transport code. It is GitHub-consumable for now; it is not
+published to npm yet.
+
 ```bash
 printf "Hello from Kokoro." | kokoro-rocm -o /tmp/hello.wav
 ```
@@ -95,9 +108,26 @@ Development:
 ```bash
 nix develop
 bun install
-uv sync --dev
 bun run build
-printf "Hello" | bun run ts/src/main.ts -o /tmp/hello.wav
+bun run typecheck
+bun run test
+cd python && uv sync --dev && uv run pytest
+```
+
+Run the CLI from source:
+
+```bash
+printf "Hello" | bun run apps/cli/src/main.ts -o /tmp/hello.wav
+```
+
+Nix builds the TypeScript bundle during the flake build. Generated `dist/`
+directories are intentionally not committed.
+
+Useful Nix commands:
+
+```bash
+nix flake check
+nix run . -- health --json
 ```
 
 NixOS flake integration:
@@ -111,6 +141,31 @@ Home Manager package:
 ```nix
 inputs.kokoro-rocm.packages.${pkgs.stdenv.hostPlatform.system}.default
 ```
+
+## Protocol package
+
+`@anoromi/kokoro-rocm-protocol` exports Effect Schema definitions, inferred
+TypeScript types, and JSON line helpers for both the daemon socket protocol and
+the session NDJSON protocol.
+
+Example:
+
+```ts
+import {
+  SynthesizeParams,
+  decodeSessionLine,
+  eventLine,
+} from "@anoromi/kokoro-rocm-protocol"
+
+const params = SynthesizeParams
+const request = decodeSessionLine(
+  '{"id":"1","method":"health","params":{}}'
+)
+const line = eventLine({ event: "ready", version: "0.1.0" })
+```
+
+The package intentionally does not include Unix socket clients, daemon
+auto-start logic, filesystem path resolution, or Bun-specific APIs.
 
 ## Setup
 

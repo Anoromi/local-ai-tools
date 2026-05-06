@@ -27,16 +27,70 @@
         pkgs.zlib
         pkgs.libsndfile
       ];
+      bunDeps = pkgs.stdenvNoCC.mkDerivation {
+        pname = "kokoro-rocm-bun-deps";
+        version = "0.1.0";
+        src = ./.;
+        nativeBuildInputs = [ pkgs.bun ];
+        outputHashMode = "recursive";
+        outputHashAlgo = "sha256";
+        outputHash = "sha256-2J3JsO2+Ah//bN3AOux4bk2NN3zX69ou3r8xwM9+cuo=";
+        dontFixup = true;
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR"
+          bun install --frozen-lockfile
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          mkdir -p "$out"
+          cp -R node_modules "$out/node_modules"
+          if [ -d apps/cli/node_modules ]; then
+            mkdir -p "$out/apps/cli"
+            cp -R apps/cli/node_modules "$out/apps/cli/node_modules"
+          fi
+          if [ -d packages/protocol/node_modules ]; then
+            mkdir -p "$out/packages/protocol"
+            cp -R packages/protocol/node_modules "$out/packages/protocol/node_modules"
+          fi
+          runHook postInstall
+        '';
+      };
       kokoro-rocm = pkgs.stdenvNoCC.mkDerivation {
         pname = "kokoro-rocm";
         version = "0.1.0";
         src = ./.;
-        nativeBuildInputs = [ pkgs.makeWrapper ];
+        nativeBuildInputs = [ pkgs.makeWrapper pkgs.bun ];
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR"
+          cp -R ${bunDeps}/node_modules ./node_modules
+          if [ -d ${bunDeps}/apps/cli/node_modules ]; then
+            mkdir -p apps/cli
+            cp -R ${bunDeps}/apps/cli/node_modules apps/cli/node_modules
+          fi
+          if [ -d ${bunDeps}/packages/protocol/node_modules ]; then
+            mkdir -p packages/protocol
+            cp -R ${bunDeps}/packages/protocol/node_modules packages/protocol/node_modules
+          fi
+          chmod -R u+w ./node_modules
+          [ -d apps/cli/node_modules ] && chmod -R u+w apps/cli/node_modules
+          [ -d packages/protocol/node_modules ] && chmod -R u+w packages/protocol/node_modules
+          mkdir -p packages/protocol/dist apps/cli/dist
+          bun build packages/protocol/src/index.ts packages/protocol/src/schema.ts packages/protocol/src/encode.ts \
+            --target=node \
+            --outdir packages/protocol/dist
+          bun build apps/cli/src/main.ts \
+            --target=bun \
+            --outfile apps/cli/dist/kokoro-rocm.js
+          runHook postBuild
+        '';
         installPhase = ''
           runHook preInstall
           mkdir -p "$out/share/kokoro-rocm/dist" "$out/share/kokoro-rocm/python" "$out/bin"
-          cp dist/kokoro-rocm.js "$out/share/kokoro-rocm/dist/kokoro-rocm.js"
-          cp -R src "$out/share/kokoro-rocm/python/src"
+          cp apps/cli/dist/kokoro-rocm.js "$out/share/kokoro-rocm/dist/kokoro-rocm.js"
+          cp -R python/src "$out/share/kokoro-rocm/python/src"
           makeWrapper ${pkgs.bun}/bin/bun "$out/bin/kokoro-rocm" \
             --add-flags "$out/share/kokoro-rocm/dist/kokoro-rocm.js" \
             --prefix PATH : "${runtimePath}" \
@@ -81,9 +135,9 @@
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          uv
           bun
           nodejs_22
+          uv
           python312
           ffmpeg
           sox
@@ -104,7 +158,7 @@
         ];
 
         shellHook = ''
-          export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
+          export UV_PROJECT_ENVIRONMENT="$PWD/python/.venv"
           export KOKORO_ROCM_PYTHON="''${KOKORO_ROCM_PYTHON:-/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python}"
           export HIP_VISIBLE_DEVICES="''${HIP_VISIBLE_DEVICES:-0}"
           export ROCR_VISIBLE_DEVICES="''${ROCR_VISIBLE_DEVICES:-0}"
@@ -114,8 +168,8 @@
           export TOKENIZERS_PARALLELISM=false
           export LD_LIBRARY_PATH="${ldPath}:/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/lib/python3.12/site-packages/_rocm_sdk_core/lib:''${LD_LIBRARY_PATH:-}"
           echo "kokoro-rocm dev shell"
-          echo "Run: uv sync --dev"
-          echo "Then: printf 'Hello' | uv run kokoro-rocm -o /tmp/hello.wav"
+          echo "Run: bun install"
+          echo "Then: bun run build && cd python && uv sync --dev"
         '';
       };
     };

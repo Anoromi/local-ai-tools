@@ -6,6 +6,13 @@
     "moduleDetection": "force",
     "types": ["bun"],
     "moduleResolution": "bundler",
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@anoromi/kokoro-rocm-protocol": ["packages/protocol/src/index.ts"],
+      "@anoromi/kokoro-rocm-protocol/schema": ["packages/protocol/src/schema.ts"],
+      "@anoromi/kokoro-rocm-protocol/encode": ["packages/protocol/src/encode.ts"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
@@ -17,6 +24,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  },
-  "include": ["ts/**/*.ts"]
+  }
 }

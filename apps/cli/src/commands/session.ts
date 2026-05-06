@@ -1,7 +1,6 @@
 import { Effect } from "effect"
 import { callOnce, callStream } from "../protocol/socket-client"
-import { decodeSessionLine } from "../protocol/encode"
-import { decodeSynthesizeParams } from "../protocol/schema"
+import { decodeSessionLine, decodeSynthesizeParams } from "@anoromi/kokoro-rocm-protocol"
 import * as Events from "../protocol/session-events"
 import { ensureDaemon } from "../runtime/daemon"
 import { stdinLines } from "../runtime/stdin"

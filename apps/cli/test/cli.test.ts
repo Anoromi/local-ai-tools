@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 
-const cli = ["bun", "run", "ts/src/main.ts"] as const
+const cli = ["bun", "run", "src/main.ts"] as const
 
 describe("cli contract", () => {
   test("root help lists session", () => {
