@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .engine import KokoroEngine
 from .paths import log_path, pid_path, socket_path
-from .protocol import failure, parse_request, success, validate_synthesize
+from .protocol import failure, parse_request, stream_event, success, validate_synthesize
 
 
 class KokoroDaemon:
@@ -52,6 +52,19 @@ class KokoroDaemon:
                 async with self.lock:
                     result = await asyncio.to_thread(self._synthesize, request.params)
                 writer.write(success(request.id, result).encode())
+            elif request.method == "synthesize_stream":
+                validate_synthesize(request.params)
+                writer.write(stream_event(request.id, "started", {}).encode())
+                await writer.drain()
+                loop = asyncio.get_running_loop()
+
+                def emit(data: dict) -> None:
+                    loop.call_soon_threadsafe(writer.write, stream_event(request.id, data.get("event", "chunk"), data).encode())
+
+                async with self.lock:
+                    result = await asyncio.to_thread(self._synthesize, request.params, emit)
+                await writer.drain()
+                writer.write(success(request.id, result).encode())
             else:
                 writer.write(failure(request.id, "protocol", f"unknown method: {request.method}").encode())
             await writer.drain()
@@ -62,7 +75,7 @@ class KokoroDaemon:
             writer.close()
             await writer.wait_closed()
 
-    def _synthesize(self, params: dict) -> dict:
+    def _synthesize(self, params: dict, on_event=None) -> dict:
         if self.engine is None:
             raise RuntimeError("engine is not loaded")
         return self.engine.synthesize(
@@ -72,6 +85,7 @@ class KokoroDaemon:
             voice=params.get("voice") or "af_sarah",
             speed=float(params.get("speed", 1.0)),
             target_wpm=None if params.get("target_wpm") is None else float(params["target_wpm"]),
+            on_event=on_event,
         )
 
 

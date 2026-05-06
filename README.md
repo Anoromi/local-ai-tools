@@ -1,8 +1,10 @@
 # kokoro-rocm
 
 `kokoro-rocm` is a local Kokoro PyTorch ROCm CLI backed by a Unix-socket daemon.
-The CLI reads text from stdin, auto-starts the daemon if needed, and writes a
-WAV plus a timing JSON sidecar.
+The user-facing CLI is TypeScript/Bun with Effect CLI and Effect Schema. Python
+stays responsible for Kokoro, PyTorch, ROCm setup, health probes, and the daemon.
+The CLI reads text from stdin, auto-starts the daemon if needed, and writes a WAV
+plus a timing JSON sidecar.
 
 ```bash
 printf "Hello from Kokoro." | kokoro-rocm -o /tmp/hello.wav
@@ -25,6 +27,7 @@ resident so repeated CLI calls only pay synthesis and post-processing time.
 ```bash
 kokoro-rocm setup
 kokoro-rocm health
+kokoro-rocm session
 kokoro-rocm serve
 kokoro-rocm status
 kokoro-rocm stop
@@ -47,14 +50,54 @@ If `--target-wpm` is set, FFmpeg `atempo` is used when native speech is outside
 the target tolerance. Word and chunk timings in the JSON sidecar are rescaled by
 the same factor.
 
+## Session mode
+
+For editor/app integrations, keep one client process alive:
+
+```bash
+kokoro-rocm session
+```
+
+`session` reads newline-delimited JSON from stdin and writes newline-delimited
+JSON events to stdout. Human logs go to stderr.
+
+Health example:
+
+```bash
+printf '{"id":"1","method":"health","params":{}}\n{"id":"2","method":"exit","params":{}}\n' \
+  | kokoro-rocm session
+```
+
+Synthesis example:
+
+```bash
+printf '{"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/hello.wav","timings_path":"/tmp/hello.json","voice":"af_sarah","speed":1,"target_wpm":null,"format":"wav"}}\n{"id":"2","method":"exit","params":{}}\n' \
+  | kokoro-rocm session
+```
+
+Typical events:
+
+```json
+{"event":"ready","version":"0.1.0"}
+{"id":"1","event":"accepted"}
+{"id":"1","event":"started"}
+{"id":"1","event":"chunk","chunk":{"index":0,"text":"Hello","start":0,"end":1.2,"duration":1.2,"timing_basis":"native"}}
+{"id":"1","event":"finished","result":{"output_path":"/tmp/hello.wav","timings_path":"/tmp/hello.json"}}
+```
+
+Session mode avoids repeated CLI process startup. One-shot commands are kept for
+normal shell use.
+
 ## Nix
 
 Development:
 
 ```bash
 nix develop
+bun install
 uv sync --dev
-printf "Hello" | uv run kokoro-rocm -o /tmp/hello.wav
+bun run build
+printf "Hello" | bun run ts/src/main.ts -o /tmp/hello.wav
 ```
 
 NixOS flake integration:
@@ -133,6 +176,18 @@ Health checks cover:
 - Kokoro/SoundFile/NumPy imports
 - daemon socket status
 - optional direct synthesis probe
+
+## Internal helper
+
+The Nix package exposes:
+
+```text
+kokoro-rocm         TypeScript/Bun CLI
+kokoro-rocm-python  Python helper used for serve/setup/health
+```
+
+`kokoro-rocm-python` is not intended as the primary user interface, but it is
+available for debugging.
 
 ## Runtime assets
 

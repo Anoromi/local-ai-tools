@@ -2,7 +2,9 @@ import json
 
 import pytest
 
-from kokoro_rocm.protocol import ProtocolError, parse_request, request_line, validate_synthesize
+import json
+
+from kokoro_rocm.protocol import ProtocolError, parse_request, request_line, stream_event, validate_synthesize
 
 
 def test_parse_request():
@@ -29,3 +31,8 @@ def test_validate_synthesize_requires_output():
 
 def test_validate_synthesize_accepts_target_wpm():
     validate_synthesize({"text": "hello", "output_path": "/tmp/a.wav", "timings_path": "/tmp/a.json", "target_wpm": 500})
+
+
+def test_stream_event_shape():
+    payload = json.loads(stream_event("1", "chunk", {"chunk": {"index": 0}}))
+    assert payload == {"id": "1", "ok": True, "event": "chunk", "data": {"chunk": {"index": 0}}}

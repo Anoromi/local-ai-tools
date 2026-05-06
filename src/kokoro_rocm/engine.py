@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -78,6 +79,7 @@ class KokoroEngine:
         voice: str,
         speed: float,
         target_wpm: float | None,
+        on_event: Callable[[dict], None] | None = None,
     ) -> dict:
         output_path = output_path.expanduser().resolve()
         timings_path = timings_path.expanduser().resolve()
@@ -91,7 +93,7 @@ class KokoroEngine:
             tmpdir = Path(tmp)
             native_path = tmpdir / "native.wav"
             final_path = tmpdir / "final.wav"
-            generation = self._generate_native(text, voice_file, speed, native_path)
+            generation = self._generate_native(text, voice_file, speed, native_path, on_event=on_event)
             native_seconds = audio_utils.duration_seconds(native_path)
             native_wpm = actual_wpm(word_count(text), native_seconds)
             post = {"used": False, "engine": None, "factor": None, "filter": None, "seconds": 0.0}
@@ -143,7 +145,14 @@ class KokoroEngine:
             "target_wpm": target_wpm,
         }
 
-    def _generate_native(self, text: str, voice_file: Path, speed: float, wav_path: Path) -> dict:
+    def _generate_native(
+        self,
+        text: str,
+        voice_file: Path,
+        speed: float,
+        wav_path: Path,
+        on_event: Callable[[dict], None] | None = None,
+    ) -> dict:
         audio_chunks = []
         words = []
         chunks = []
@@ -167,6 +176,20 @@ class KokoroEngine:
                         "duration": chunk_duration,
                     }
                 )
+                if on_event is not None:
+                    on_event(
+                        {
+                            "event": "chunk",
+                            "chunk": {
+                                "index": chunk_index,
+                                "text": result.graphemes,
+                                "start": offset,
+                                "end": offset + chunk_duration,
+                                "duration": chunk_duration,
+                                "timing_basis": "native",
+                            },
+                        }
+                    )
                 for token_index, token in enumerate(result.tokens or []):
                     text_value, whitespace = token_text(token)
                     if not text_value.strip() or not hasattr(token, "start_ts") or not hasattr(token, "end_ts"):

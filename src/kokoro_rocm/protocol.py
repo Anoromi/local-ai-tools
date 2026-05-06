@@ -66,5 +66,9 @@ def failure(request_id: str, stage: str, message: str, detail: str = "") -> str:
     ) + "\n"
 
 
+def stream_event(request_id: str, event: str, data: dict[str, Any]) -> str:
+    return json.dumps({"id": request_id, "ok": True, "event": event, "data": data}, separators=(",", ":")) + "\n"
+
+
 def request_line(request_id: str, method: str, params: dict[str, Any]) -> bytes:
     return (json.dumps({"id": request_id, "method": method, "params": params}, separators=(",", ":")) + "\n").encode("utf-8")

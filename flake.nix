@@ -14,6 +14,7 @@
       };
       python = pkgs.python312;
       runtimePath = pkgs.lib.makeBinPath [
+        pkgs.bun
         pkgs.uv
         pkgs.ffmpeg
         pkgs.sox
@@ -33,10 +34,24 @@
         nativeBuildInputs = [ pkgs.makeWrapper ];
         installPhase = ''
           runHook preInstall
-          mkdir -p "$out/share/kokoro-rocm" "$out/bin"
-          cp -R . "$out/share/kokoro-rocm/source"
-          makeWrapper ${python}/bin/python "$out/bin/kokoro-rocm" \
-            --prefix PYTHONPATH : "$out/share/kokoro-rocm/source/src" \
+          mkdir -p "$out/share/kokoro-rocm/dist" "$out/share/kokoro-rocm/python" "$out/bin"
+          cp dist/kokoro-rocm.js "$out/share/kokoro-rocm/dist/kokoro-rocm.js"
+          cp -R src "$out/share/kokoro-rocm/python/src"
+          makeWrapper ${pkgs.bun}/bin/bun "$out/bin/kokoro-rocm" \
+            --add-flags "$out/share/kokoro-rocm/dist/kokoro-rocm.js" \
+            --prefix PATH : "${runtimePath}" \
+            --prefix LD_LIBRARY_PATH : "${ldPath}:/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/lib/python3.12/site-packages/_rocm_sdk_core/lib" \
+            --set-default KOKORO_ROCM_PYTHON "/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python" \
+            --set-default KOKORO_ROCM_PYTHONPATH "$out/share/kokoro-rocm/python/src" \
+            --set-default KOKORO_ROCM_PYTHON_HELPER "$out/bin/kokoro-rocm-python" \
+            --set-default HIP_VISIBLE_DEVICES "0" \
+            --set-default ROCR_VISIBLE_DEVICES "0" \
+            --set-default PYTORCH_ROCM_ARCH "gfx1151" \
+            --set-default HSA_OVERRIDE_GFX_VERSION "11.5.1" \
+            --set-default HF_HUB_DISABLE_TELEMETRY "1" \
+            --set-default TOKENIZERS_PARALLELISM "false"
+          makeWrapper ${python}/bin/python "$out/bin/kokoro-rocm-python" \
+            --prefix PYTHONPATH : "$out/share/kokoro-rocm/python/src" \
             --prefix PATH : "${runtimePath}" \
             --prefix LD_LIBRARY_PATH : "${ldPath}:/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/lib/python3.12/site-packages/_rocm_sdk_core/lib" \
             --set-default KOKORO_ROCM_PYTHON "/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python" \
@@ -67,6 +82,8 @@
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           uv
+          bun
+          nodejs_22
           python312
           ffmpeg
           sox
