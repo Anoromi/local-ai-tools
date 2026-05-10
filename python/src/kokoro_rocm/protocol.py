@@ -47,12 +47,18 @@ def validate_synthesize(params: dict[str, Any]) -> None:
         raise ProtocolError("output_path is required")
     if not isinstance(timings_path, str) or not timings_path:
         raise ProtocolError("timings_path is required")
+    profile_path = params.get("profile_path")
+    if profile_path is not None and (not isinstance(profile_path, str) or not profile_path):
+        raise ProtocolError("profile_path must be a non-empty string")
     speed = params.get("speed", 1.0)
     if not isinstance(speed, (int, float)) or speed <= 0:
         raise ProtocolError("speed must be a positive number")
     target = params.get("target_wpm")
     if target is not None and (not isinstance(target, (int, float)) or target <= 0):
         raise ProtocolError("target_wpm must be a positive number")
+    precision = params.get("precision", "fp32")
+    if precision not in ("fp32", "fp16"):
+        raise ProtocolError("precision must be fp32 or fp16")
 
 
 def success(request_id: str, result: dict[str, Any]) -> str:

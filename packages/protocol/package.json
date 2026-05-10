@@ -1,35 +1,55 @@
 {
   "name": "@anoromi/kokoro-rocm-protocol",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "Effect Schema protocol definitions for kokoro-rocm clients",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anoromi/kokoro-rocm.git",
+    "directory": "packages/protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/Anoromi/kokoro-rocm/issues"
+  },
+  "homepage": "https://github.com/Anoromi/kokoro-rocm/tree/main/packages/protocol#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     },
     "./schema": {
-      "types": "./dist/schema.d.ts",
-      "default": "./dist/schema.js"
+      "types": "./dist/schema.d.mts",
+      "import": "./dist/schema.mjs"
     },
     "./encode": {
-      "types": "./dist/encode.d.ts",
-      "default": "./dist/encode.js"
+      "types": "./dist/encode.d.mts",
+      "import": "./dist/encode.mjs"
     }
   },
   "files": ["dist"],
   "scripts": {
-    "build": "bun build src/index.ts src/schema.ts src/encode.ts --target=node --outdir dist && tsc --emitDeclarationOnly",
+    "clean": "rm -rf dist",
+    "build": "tsdown src/index.ts src/schema.ts src/encode.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
-    "test": "bun test test"
+    "test": "bun test test",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run typecheck && bun run test && bun run build",
+    "pack:dry": "npm pack --dry-run",
+    "publish:npm": "npm publish --access public"
   },
-  "dependencies": {
-    "effect": "3.21.2"
+  "peerDependencies": {
+    "effect": "4.0.0-beta.45"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
+    "effect": "4.0.0-beta.45",
+    "tsdown": "^0.20.3",
     "typescript": "^6.0.3"
   }
 }

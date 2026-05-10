@@ -1,11 +1,12 @@
-import * as Schema from "effect/Schema"
+import { Effect, Schema } from "effect"
 
 export const RequestId = Schema.NonEmptyString
 export const SocketPath = Schema.NonEmptyString
 export const OutputPath = Schema.NonEmptyString
 export const VoiceName = Schema.NonEmptyString
-export const PositiveNumber = Schema.Number.pipe(Schema.positive())
+export const PositiveNumber = Schema.Number.check(Schema.isGreaterThan(0))
 export const NullableTargetWpm = Schema.NullOr(PositiveNumber)
+export const Precision = Schema.Literals(["fp32", "fp16"])
 
 export const HealthParams = Schema.Struct({})
 export const ShutdownParams = Schema.Struct({})
@@ -14,30 +15,32 @@ export const SynthesizeParams = Schema.Struct({
   text: Schema.NonEmptyString,
   output_path: OutputPath,
   timings_path: OutputPath,
-  voice: Schema.optionalWith(VoiceName, { default: () => "af_sarah" }),
-  speed: Schema.optionalWith(PositiveNumber, { default: () => 1 }),
-  target_wpm: Schema.optionalWith(NullableTargetWpm, { default: () => null }),
-  format: Schema.optionalWith(Schema.Literal("wav"), { default: () => "wav" as const })
+  profile_path: Schema.NullOr(OutputPath).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
+  voice: VoiceName.pipe(Schema.withDecodingDefaultKey(Effect.succeed("af_sarah"))),
+  speed: PositiveNumber.pipe(Schema.withDecodingDefaultKey(Effect.succeed(1))),
+  target_wpm: NullableTargetWpm.pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
+  precision: Precision.pipe(Schema.withDecodingDefaultKey(Effect.succeed("fp32" as const))),
+  format: Schema.Literal("wav").pipe(Schema.withDecodingDefaultKey(Effect.succeed("wav" as const)))
 })
 
-export const DaemonMethod = Schema.Literal("health", "shutdown", "synthesize", "synthesize_stream")
+export const DaemonMethod = Schema.Literals(["health", "shutdown", "synthesize", "synthesize_stream"])
 
 export const DaemonRequest = Schema.Struct({
   id: RequestId,
   method: DaemonMethod,
-  params: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  params: Schema.Record(Schema.String, Schema.Any)
 })
 
 export const ErrorPayload = Schema.Struct({
   stage: Schema.String,
   message: Schema.String,
-  detail: Schema.optionalWith(Schema.String, { default: () => "" })
+  detail: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("")))
 })
 
 export const DaemonSuccessResponse = Schema.Struct({
   id: RequestId,
   ok: Schema.Literal(true),
-  result: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  result: Schema.Record(Schema.String, Schema.Any)
 })
 
 export const DaemonFailureResponse = Schema.Struct({
@@ -58,18 +61,18 @@ export const ChunkPayload = Schema.Struct({
 export const DaemonStreamEvent = Schema.Struct({
   id: RequestId,
   ok: Schema.Literal(true),
-  event: Schema.Literal("started", "chunk"),
-  data: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  event: Schema.Literals(["started", "chunk"]),
+  data: Schema.Record(Schema.String, Schema.Any)
 })
 
-export const DaemonMessage = Schema.Union(DaemonSuccessResponse, DaemonFailureResponse, DaemonStreamEvent)
+export const DaemonMessage = Schema.Union([DaemonSuccessResponse, DaemonFailureResponse, DaemonStreamEvent])
 
-export const SessionMethod = Schema.Literal("health", "synthesize", "shutdownDaemon", "exit")
+export const SessionMethod = Schema.Literals(["health", "synthesize", "shutdownDaemon", "exit"])
 
 export const SessionRequest = Schema.Struct({
   id: RequestId,
   method: SessionMethod,
-  params: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  params: Schema.Record(Schema.String, Schema.Any)
 })
 
 export const ReadyEvent = Schema.Struct({
@@ -107,7 +110,7 @@ export const ChunkEvent = Schema.Struct({
 export const FinishedEvent = Schema.Struct({
   id: RequestId,
   event: Schema.Literal("finished"),
-  result: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  result: Schema.Record(Schema.String, Schema.Any)
 })
 
 export const ErrorEvent = Schema.Struct({
@@ -119,10 +122,10 @@ export const ErrorEvent = Schema.Struct({
 export const HealthEvent = Schema.Struct({
   id: RequestId,
   event: Schema.Literal("health"),
-  result: Schema.Record({ key: Schema.String, value: Schema.Unknown })
+  result: Schema.Record(Schema.String, Schema.Any)
 })
 
-export const SessionEvent = Schema.Union(
+export const SessionEvent = Schema.Union([
   ReadyEvent,
   AcceptedEvent,
   DaemonStartingEvent,
@@ -132,18 +135,18 @@ export const SessionEvent = Schema.Union(
   FinishedEvent,
   ErrorEvent,
   HealthEvent
-)
+])
 
-export type SynthesizeParams = Schema.Schema.Type<typeof SynthesizeParams>
-export type DaemonRequest = Schema.Schema.Type<typeof DaemonRequest>
-export type DaemonSuccessResponse = Schema.Schema.Type<typeof DaemonSuccessResponse>
-export type DaemonFailureResponse = Schema.Schema.Type<typeof DaemonFailureResponse>
-export type DaemonStreamEvent = Schema.Schema.Type<typeof DaemonStreamEvent>
-export type DaemonMessage = Schema.Schema.Type<typeof DaemonMessage>
-export type SessionRequest = Schema.Schema.Type<typeof SessionRequest>
-export type SessionEvent = Schema.Schema.Type<typeof SessionEvent>
-export type ErrorPayload = Schema.Schema.Type<typeof ErrorPayload>
-export type ChunkPayload = Schema.Schema.Type<typeof ChunkPayload>
+export type SynthesizeParams = typeof SynthesizeParams.Type
+export type DaemonRequest = typeof DaemonRequest.Type
+export type DaemonSuccessResponse = typeof DaemonSuccessResponse.Type
+export type DaemonFailureResponse = typeof DaemonFailureResponse.Type
+export type DaemonStreamEvent = typeof DaemonStreamEvent.Type
+export type DaemonMessage = typeof DaemonMessage.Type
+export type SessionRequest = typeof SessionRequest.Type
+export type SessionEvent = typeof SessionEvent.Type
+export type ErrorPayload = typeof ErrorPayload.Type
+export type ChunkPayload = typeof ChunkPayload.Type
 
 export const decodeDaemonMessage = Schema.decodeUnknownSync(DaemonMessage)
 export const decodeSessionRequest = Schema.decodeUnknownSync(SessionRequest)

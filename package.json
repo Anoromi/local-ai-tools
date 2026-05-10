@@ -11,14 +11,19 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev": "bun --filter @anoromi/kokoro-rocm-cli dev"
+    "dev": "bun --filter @anoromi/kokoro-rocm-cli dev",
+    "protocol:build": "bun run --cwd packages/protocol build",
+    "protocol:test": "bun run --cwd packages/protocol test",
+    "protocol:pack:dry": "cd packages/protocol && npm pack --dry-run",
+    "protocol:publish": "cd packages/protocol && npm publish --access public"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
+    "tsdown": "^0.20.3",
     "turbo": "2.9.9",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "effect": "3.21.2"
+    "effect": "4.0.0-beta.45"
   }
 }

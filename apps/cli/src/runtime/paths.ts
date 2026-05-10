@@ -29,6 +29,10 @@ export function sidecarPath(outputPath: string): string {
   return outputPath.replace(/\.[^/.]+$/, "") + ".json"
 }
 
+export function profilePath(outputPath: string): string {
+  return outputPath.replace(/\.[^/.]+$/, "") + ".profile.json"
+}
+
 export function absolutePath(path: string): string {
   if (path.startsWith("~")) {
     return resolve(homedir(), path.slice(1))

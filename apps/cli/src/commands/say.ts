@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { callOnce } from "../protocol/socket-client"
 import { ensureDaemon } from "../runtime/daemon"
-import { absolutePath, ensureParent, sidecarPath } from "../runtime/paths"
+import { absolutePath, ensureParent, profilePath, sidecarPath } from "../runtime/paths"
 import { readAllStdin } from "../runtime/stdin"
 import { printError, writeStdout } from "../runtime/output"
 import { EXIT_DAEMON, EXIT_PROTOCOL, EXIT_SYNTHESIS, EXIT_USAGE } from "./exit-codes"
@@ -11,6 +11,9 @@ export interface SayOptions {
   readonly voice: string
   readonly speed: number
   readonly targetWpm?: number | null
+  readonly precision: "fp32" | "fp16"
+  readonly profile: boolean
+  readonly profileOutput?: string | null
   readonly socket?: string | null
 }
 
@@ -29,7 +32,9 @@ export function runSay(options: SayOptions): Effect.Effect<void> {
     }
     const output = absolutePath(options.output)
     const timings = sidecarPath(output)
+    const profile = options.profileOutput ? absolutePath(options.profileOutput) : options.profile ? profilePath(output) : null
     ensureParent(output)
+    if (profile) ensureParent(profile)
     try {
       await ensureDaemon(options.socket)
     } catch (error) {
@@ -47,6 +52,8 @@ export function runSay(options: SayOptions): Effect.Effect<void> {
         voice: options.voice,
         speed: options.speed,
         target_wpm: options.targetWpm ?? null,
+        precision: options.precision,
+        profile_path: profile,
         format: "wav"
       },
       3_600_000

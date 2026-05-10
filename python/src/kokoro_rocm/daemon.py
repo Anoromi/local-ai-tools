@@ -82,9 +82,11 @@ class KokoroDaemon:
             text=params["text"],
             output_path=Path(params["output_path"]),
             timings_path=Path(params["timings_path"]),
+            profile_path=None if params.get("profile_path") is None else Path(params["profile_path"]),
             voice=params.get("voice") or "af_sarah",
             speed=float(params.get("speed", 1.0)),
             target_wpm=None if params.get("target_wpm") is None else float(params["target_wpm"]),
+            precision=params.get("precision") or "fp32",
             on_event=on_event,
         )
 

@@ -1,6 +1,6 @@
-import { Command, Options } from "@effect/cli"
-import { NodeContext, NodeRuntime } from "@effect/platform-node"
-import { Effect, Option, pipe } from "effect"
+import * as BunServices from "@effect/platform-bun/BunServices"
+import { Effect, Option } from "effect"
+import { Command, Flag } from "effect/unstable/cli"
 import { runSay } from "./commands/say"
 import { runStatus } from "./commands/status"
 import { runStop } from "./commands/stop"
@@ -10,23 +10,29 @@ import { runHealth } from "./commands/health"
 import { runSession } from "./commands/session"
 import { CliExit, EXIT_USAGE } from "./commands/exit-codes"
 
-const optString = (name: string) => Options.optional(Options.text(name))
-const optNumber = (name: string) => Options.optional(Options.float(name))
-const withDefault = <A, B>(option: Options.Options<A>, value: B) => Options.withDefault(option, value)
-const optionValue = <A>(value: Option.Option<A>): A | undefined => Option.getOrUndefined(value)
+const VERSION = "0.1.0"
 
-const outputOption = Options.optional(Options.withAlias(Options.text("output"), "o"))
-const voiceOption = withDefault(Options.text("voice"), "af_sarah")
-const speedOption = withDefault(Options.float("speed"), 1)
-const targetWpmOption = optNumber("target-wpm")
-const socketOption = optString("socket")
+const optionValue = <A>(value: Option.Option<A>): A | undefined => Option.getOrUndefined(value)
+const optionalString = (name: string) => Flag.string(name).pipe(Flag.optional)
+const optionalFloat = (name: string) => Flag.float(name).pipe(Flag.optional)
+const outputFlag = Flag.string("output").pipe(Flag.withAlias("o"), Flag.optional)
+const voiceFlag = Flag.string("voice").pipe(Flag.withDefault("af_sarah"))
+const speedFlag = Flag.float("speed").pipe(Flag.withDefault(1))
+const targetWpmFlag = optionalFloat("target-wpm")
+const precisionFlag = Flag.choice("precision", ["fp32", "fp16"] as const).pipe(Flag.withDefault("fp32"))
+const profileFlag = Flag.boolean("profile")
+const profileOutputFlag = optionalString("profile-output")
+const socketFlag = optionalString("socket")
 
 const sayConfig = {
-  output: outputOption,
-  voice: voiceOption,
-  speed: speedOption,
-  targetWpm: targetWpmOption,
-  socket: socketOption
+  output: outputFlag,
+  voice: voiceFlag,
+  speed: speedFlag,
+  targetWpm: targetWpmFlag,
+  precision: precisionFlag,
+  profile: profileFlag,
+  profileOutput: profileOutputFlag,
+  socket: socketFlag
 }
 
 const say = Command.make("say", sayConfig, (args) =>
@@ -35,19 +41,22 @@ const say = Command.make("say", sayConfig, (args) =>
     voice: args.voice,
     speed: args.speed,
     targetWpm: optionValue(args.targetWpm) ?? null,
+    precision: args.precision,
+    profile: args.profile,
+    profileOutput: optionValue(args.profileOutput),
     socket: optionValue(args.socket)
   })
 )
 
-const status = Command.make("status", { socket: socketOption }, (args) => runStatus(optionValue(args.socket)))
-const stop = Command.make("stop", { socket: socketOption }, (args) => runStop(optionValue(args.socket)))
-const session = Command.make("session", { socket: socketOption }, (args) => runSession(optionValue(args.socket)))
+const status = Command.make("status", { socket: socketFlag }, (args) => runStatus(optionValue(args.socket)))
+const stop = Command.make("stop", { socket: socketFlag }, (args) => runStop(optionValue(args.socket)))
+const session = Command.make("session", { socket: socketFlag }, (args) => runSession(optionValue(args.socket)))
 
 const serve = Command.make(
   "serve",
   {
-    foreground: Options.boolean("foreground"),
-    socket: socketOption
+    foreground: Flag.boolean("foreground"),
+    socket: socketFlag
   },
   (args) => runServe(renderOptions({ foreground: args.foreground, socket: optionValue(args.socket) }))
 )
@@ -55,16 +64,16 @@ const serve = Command.make(
 const setup = Command.make(
   "setup",
   {
-    torch: withDefault(Options.choice("torch", ["rocm6.4", "rocm6.3", "cpu", "existing"] as const), "rocm6.4"),
-    python: withDefault(Options.text("python"), "3.12"),
-    pythonPath: optString("python-path"),
-    dataDir: optString("data-dir"),
-    voice: withDefault(Options.text("voice"), "af_sarah"),
-    force: Options.boolean("force"),
-    noDownload: Options.boolean("no-download"),
-    modelUrl: optString("model-url"),
-    configUrl: optString("config-url"),
-    voiceUrl: optString("voice-url")
+    torch: Flag.choice("torch", ["rocm6.4", "rocm6.3", "cpu", "existing"] as const).pipe(Flag.withDefault("rocm6.4")),
+    python: Flag.string("python").pipe(Flag.withDefault("3.12")),
+    pythonPath: optionalString("python-path"),
+    dataDir: optionalString("data-dir"),
+    voice: Flag.string("voice").pipe(Flag.withDefault("af_sarah")),
+    force: Flag.boolean("force"),
+    noDownload: Flag.boolean("no-download"),
+    modelUrl: optionalString("model-url"),
+    configUrl: optionalString("config-url"),
+    voiceUrl: optionalString("voice-url")
   },
   (args) =>
     runSetup(
@@ -86,11 +95,11 @@ const setup = Command.make(
 const health = Command.make(
   "health",
   {
-    json: Options.boolean("json"),
-    output: optString("output"),
-    probeSynthesis: Options.boolean("probe-synthesis"),
-    keepProbeOutput: Options.boolean("keep-probe-output"),
-    socket: socketOption
+    json: Flag.boolean("json"),
+    output: optionalString("output"),
+    probeSynthesis: Flag.boolean("probe-synthesis"),
+    keepProbeOutput: Flag.boolean("keep-probe-output"),
+    socket: socketFlag
   },
   (args) =>
     runHealth(
@@ -104,50 +113,26 @@ const health = Command.make(
     )
 )
 
-const root = pipe(Command.make("kokoro-rocm", {}, () => Effect.void), Command.withSubcommands([say, session, serve, status, stop, setup, health]))
+const root = Command.make("kokoro-rocm").pipe(Command.withSubcommands([say, session, serve, status, stop, setup, health]))
 
 const defaultSay = Command.make("kokoro-rocm", sayConfig, (args) =>
   runSay({
-      output: optionValue(args.output),
+    output: optionValue(args.output),
     voice: args.voice,
     speed: args.speed,
     targetWpm: optionValue(args.targetWpm) ?? null,
+    precision: args.precision,
+    profile: args.profile,
+    profileOutput: optionValue(args.profileOutput),
     socket: optionValue(args.socket)
   })
 )
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
-  if (isSubcommandHelp(argv)) {
-    printCommandHelp(argv[0]!)
-    return
-  }
-  if (argv[0] === "setup") {
-    await Effect.runPromise(runSetup(argv.slice(1)))
-    return
-  }
-  if (argv[0] === "health") {
-    await Effect.runPromise(runHealth(argv.slice(1)))
-    return
-  }
-  if (argv[0] === "serve") {
-    await Effect.runPromise(runServe(argv.slice(1)))
-    return
-  }
-  if (argv[0] === "--help" || argv[0] === "-h") {
-    printRootHelp()
-    return
-  }
-  if (argv[0] === "--version" || argv[0] === "-v") {
-    process.stdout.write("0.1.0\n")
-    return
-  }
   const { command, args } = selectCommand(argv)
-  const run = Command.run(command as any, {
-    name: "kokoro-rocm",
-    version: "0.1.0"
-  })
+  const run = Command.runWith(command, { version: VERSION })
   try {
-    await Effect.runPromise(pipe(run(["bun", "kokoro-rocm", ...args]), Effect.provide(NodeContext.layer)) as Effect.Effect<void, unknown, never>)
+    await Effect.runPromise(run(args).pipe(Effect.provide(BunServices.layer)))
   } catch (error) {
     if (error instanceof CliExit) {
       process.exitCode = error.code
@@ -156,38 +141,6 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     process.stderr.write(`${String(error)}\n`)
     process.exitCode = EXIT_USAGE
   }
-}
-
-function isSubcommandHelp(argv: readonly string[]): boolean {
-  return Boolean(argv[0] && ["say", "session", "serve", "status", "stop", "setup", "health"].includes(argv[0]) && (argv.includes("--help") || argv.includes("-h")))
-}
-
-function printCommandHelp(command: string): void {
-  const usage: Record<string, string> = {
-    say: "kokoro-rocm say -o output.wav [--voice af_sarah] [--speed 1.0] [--target-wpm 500] [--socket PATH]",
-    session: "kokoro-rocm session [--socket PATH]",
-    serve: "kokoro-rocm serve [--foreground] [--socket PATH]",
-    status: "kokoro-rocm status [--socket PATH]",
-    stop: "kokoro-rocm stop [--socket PATH]",
-    setup: "kokoro-rocm setup [--torch rocm6.4|rocm6.3|cpu|existing] [--python 3.12] [--python-path PATH] [--data-dir PATH] [--voice NAME] [--force] [--no-download] [--model-url URL] [--config-url URL] [--voice-url URL]",
-    health: "kokoro-rocm health [--json] [--output PATH] [--probe-synthesis] [--keep-probe-output] [--socket PATH]"
-  }
-  process.stdout.write(`${usage[command]}\n`)
-}
-
-function printRootHelp(): void {
-  process.stdout.write(`kokoro-rocm 0.1.0
-
-Usage:
-  kokoro-rocm -o output.wav [options]
-  kokoro-rocm say -o output.wav [options]
-  kokoro-rocm session [--socket PATH]
-  kokoro-rocm serve [--foreground] [--socket PATH]
-  kokoro-rocm status [--socket PATH]
-  kokoro-rocm stop [--socket PATH]
-  kokoro-rocm setup [options]
-  kokoro-rocm health [options]
-`)
 }
 
 function selectCommand(argv: readonly string[]) {

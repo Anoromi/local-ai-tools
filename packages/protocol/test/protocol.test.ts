@@ -4,9 +4,25 @@ import { decodeDaemonLine, decodeSessionLine, decodeSynthesizeParams, eventLine 
 describe("protocol schemas", () => {
   test("valid synthesize request decodes", () => {
     const request = decodeSessionLine(
-      '{"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/a.wav","timings_path":"/tmp/a.json","voice":"af_sarah","speed":1,"target_wpm":null,"format":"wav"}}'
+      '{"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/a.wav","timings_path":"/tmp/a.json","voice":"af_sarah","speed":1,"target_wpm":null,"precision":"fp16","format":"wav"}}'
     )
     expect(request.method).toBe("synthesize")
+  })
+
+  test("synthesize params default to fp32", () => {
+    const params = decodeSynthesizeParams({ text: "Hello", output_path: "/tmp/a.wav", timings_path: "/tmp/a.json" })
+    expect(params.precision).toBe("fp32")
+    expect(params.profile_path).toBe(null)
+  })
+
+  test("synthesize params accept profile path", () => {
+    const params = decodeSynthesizeParams({
+      text: "Hello",
+      output_path: "/tmp/a.wav",
+      timings_path: "/tmp/a.json",
+      profile_path: "/tmp/a.profile.json"
+    })
+    expect(params.profile_path).toBe("/tmp/a.profile.json")
   })
 
   test("missing text fails", () => {
@@ -20,6 +36,18 @@ describe("protocol schemas", () => {
   test("invalid target wpm fails", () => {
     expect(() =>
       decodeSynthesizeParams({ text: "Hello", output_path: "/tmp/a.wav", timings_path: "/tmp/a.json", target_wpm: -1 })
+    ).toThrow()
+  })
+
+  test("invalid precision fails", () => {
+    expect(() =>
+      decodeSynthesizeParams({ text: "Hello", output_path: "/tmp/a.wav", timings_path: "/tmp/a.json", precision: "bf16" })
+    ).toThrow()
+  })
+
+  test("invalid profile path fails", () => {
+    expect(() =>
+      decodeSynthesizeParams({ text: "Hello", output_path: "/tmp/a.wav", timings_path: "/tmp/a.json", profile_path: "" })
     ).toThrow()
   })
 

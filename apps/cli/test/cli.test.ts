@@ -13,7 +13,19 @@ describe("cli contract", () => {
   test("say help works without output", () => {
     const result = spawnSync(cli[0], [...cli.slice(1), "say", "--help"], { encoding: "utf8" })
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain("kokoro-rocm say")
+    expect(result.stdout).toContain("USAGE")
+    expect(result.stdout).toContain("say [flags]")
+    expect(result.stdout).toContain("--profile")
+    expect(result.stdout).toContain("--profile-output")
+  })
+
+  test("default say accepts profile flags", () => {
+    const result = spawnSync(cli[0], [...cli.slice(1), "--profile", "--profile-output", "/tmp/a.profile.json"], {
+      input: "Hello",
+      encoding: "utf8"
+    })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("-o/--output is required")
   })
 
   test("default say requires output", () => {

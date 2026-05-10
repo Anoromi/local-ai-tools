@@ -16,8 +16,7 @@ python                   Kokoro/PyTorch daemon, setup, and health implementation
 
 The protocol package is named `@anoromi/kokoro-rocm-protocol`. It is structured
 so editor extensions and other clients can reuse the daemon and session schemas
-without importing CLI transport code. It is GitHub-consumable for now; it is not
-published to npm yet.
+without importing CLI transport code. It is published to npm as a public package.
 
 ```bash
 printf "Hello from Kokoro." | kokoro-rocm -o /tmp/hello.wav
@@ -148,24 +147,36 @@ inputs.kokoro-rocm.packages.${pkgs.stdenv.hostPlatform.system}.default
 TypeScript types, and JSON line helpers for both the daemon socket protocol and
 the session NDJSON protocol.
 
+Install:
+
+```bash
+npm install @anoromi/kokoro-rocm-protocol effect@4.0.0-beta.45
+```
+
 Example:
 
 ```ts
 import {
-  SynthesizeParams,
+  decodeDaemonLine,
   decodeSessionLine,
   eventLine,
+  requestLine,
 } from "@anoromi/kokoro-rocm-protocol"
 
-const params = SynthesizeParams
 const request = decodeSessionLine(
   '{"id":"1","method":"health","params":{}}'
 )
+const daemonRequest = requestLine("2", "health", {})
 const line = eventLine({ event: "ready", version: "0.1.0" })
+const response = decodeDaemonLine(
+  '{"id":"2","ok":true,"result":{"status":"ok"}}'
+)
 ```
 
 The package intentionally does not include Unix socket clients, daemon
-auto-start logic, filesystem path resolution, or Bun-specific APIs.
+auto-start logic, filesystem path resolution, or Bun-specific APIs. It uses
+Effect 4 schemas. Generated `dist/` output is produced during build/publish and
+is not committed. The CLI package remains private.
 
 ## Setup
 
@@ -285,6 +296,19 @@ The JSON sidecar includes:
 
 Timestamps come from Kokoro `pred_dur` joined onto pipeline tokens. They are
 model-predicted timings, not external forced alignment.
+
+## Profiling
+
+Write engine-side per-step performance timings with:
+
+```bash
+kokoro-rocm say -o speech.wav --precision fp16 --profile
+```
+
+By default this writes `speech.profile.json` next to `speech.wav` and
+`speech.json`. Use `--profile-output PATH` to choose a different path. The
+profile measures synthesis work inside the daemon; it does not include CLI stdin
+read time or daemon startup time.
 
 ## Current benchmark context
 

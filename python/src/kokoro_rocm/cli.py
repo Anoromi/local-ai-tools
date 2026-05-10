@@ -67,6 +67,9 @@ def add_say_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--voice", default=env.default_voice())
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--target-wpm", type=float)
+    parser.add_argument("--precision", choices=["fp32", "fp16"], default="fp32")
+    parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--profile-output")
     parser.add_argument("--socket")
 
 
@@ -111,6 +114,7 @@ def say(args) -> int:
         return EXIT_USAGE
     output = Path(args.output).expanduser().resolve()
     timings = sidecar_path(output)
+    profile = Path(args.profile_output).expanduser().resolve() if args.profile_output else output.with_suffix(".profile.json") if args.profile else None
     try:
         ensure_daemon(args.socket)
         response = call(
@@ -120,9 +124,11 @@ def say(args) -> int:
                 "text": text.strip(),
                 "output_path": str(output),
                 "timings_path": str(timings),
+                "profile_path": None if profile is None else str(profile),
                 "voice": args.voice,
                 "speed": args.speed,
                 "target_wpm": args.target_wpm,
+                "precision": args.precision,
                 "format": "wav",
             },
             timeout=3600,

@@ -34,7 +34,7 @@
         nativeBuildInputs = [ pkgs.bun ];
         outputHashMode = "recursive";
         outputHashAlgo = "sha256";
-        outputHash = "sha256-2J3JsO2+Ah//bN3AOux4bk2NN3zX69ou3r8xwM9+cuo=";
+        outputHash = "sha256-urrN7B1Z6jrmPdtDMQPstDe/OHwpRLHwZs4NURhSJ2g=";
         dontFixup = true;
         buildPhase = ''
           runHook preBuild
