@@ -1,4 +1,7 @@
-# local-ai-tools
+# PREFACE
+Most of this project is ai generated, even the goddamn readme. Don't depend on this package in any reasonable way. It's public because I don't want to deal with private github issues and I'm using it.
+
+## local-ai-tools
 
 `local-ai-tools` is a local AI CLI backed by a Unix-socket daemon. It currently
 supports Kokoro TTS and Zilliz semantic text selection on a ROCm PyTorch stack.
