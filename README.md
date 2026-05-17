@@ -1,6 +1,7 @@
-# kokoro-rocm
+# local-ai-tools
 
-`kokoro-rocm` is a local Kokoro PyTorch ROCm CLI backed by a Unix-socket daemon.
+`local-ai-tools` is a local AI CLI backed by a Unix-socket daemon. It currently
+supports Kokoro TTS and Zilliz semantic text selection on a ROCm PyTorch stack.
 The user-facing CLI is TypeScript/Bun with Effect CLI and Effect Schema. Python
 stays responsible for Kokoro, PyTorch, ROCm setup, health probes, and the daemon.
 The CLI reads text from stdin, auto-starts the daemon if needed, and writes a WAV
@@ -11,15 +12,15 @@ This repository is a Turbo monorepo:
 ```text
 apps/cli                 TypeScript/Bun CLI
 packages/protocol        reusable Effect Schema protocol package
-python                   Kokoro/PyTorch daemon, setup, and health implementation
+python                   PyTorch daemon, setup, health, TTS, and selection implementation
 ```
 
-The protocol package is named `@anoromi/kokoro-rocm-protocol`. It is structured
+The protocol package is named `@anoromi/local-ai-tools-protocol`. It is structured
 so editor extensions and other clients can reuse the daemon and session schemas
 without importing CLI transport code. It is published to npm as a public package.
 
 ```bash
-printf "Hello from Kokoro." | kokoro-rocm -o /tmp/hello.wav
+printf "Hello from Kokoro." | local-ai-tools -o /tmp/hello.wav
 ```
 
 Outputs:
@@ -37,37 +38,63 @@ resident so repeated CLI calls only pay synthesis and post-processing time.
 ## Commands
 
 ```bash
-kokoro-rocm setup
-kokoro-rocm health
-kokoro-rocm session
-kokoro-rocm serve
-kokoro-rocm status
-kokoro-rocm stop
-printf "Text" | kokoro-rocm say -o out.wav
+local-ai-tools setup
+local-ai-tools health
+local-ai-tools session
+local-ai-tools serve
+local-ai-tools status
+local-ai-tools stop
+printf "Text" | local-ai-tools say -o out.wav
+cat doc.txt | local-ai-tools select --question "What failed?"
 ```
 
 `say` is the default command, so this is equivalent:
 
 ```bash
-printf "Text" | kokoro-rocm -o out.wav
+printf "Text" | local-ai-tools -o out.wav
 ```
 
 Useful options:
 
 ```bash
-printf "Text" | kokoro-rocm -o out.wav --voice af_sarah --speed 1.0 --target-wpm 500
+printf "Text" | local-ai-tools -o out.wav --voice af_sarah --speed 1.0 --target-wpm 500
 ```
 
 If `--target-wpm` is set, FFmpeg `atempo` is used when native speech is outside
 the target tolerance. Word and chunk timings in the JSON sidecar are rescaled by
 the same factor.
 
+## Selection
+
+`select` reads one document from stdin and batches many questions through
+`zilliz/semantic-highlight-bilingual-v1` in one daemon request:
+
+```bash
+cat doc.txt | local-ai-tools select \
+  --question "What are the action items?" \
+  --question "What risks were found?"
+```
+
+It returns JSON with selected sentence text, sentence index, character span, and
+score. Use `--input questions.json` for larger batches:
+
+```json
+{
+  "questions": [
+    { "id": "actions", "question": "What are the action items?", "threshold": 0.5 },
+    { "id": "risks", "question": "What risks were found?", "threshold": 0.55 }
+  ]
+}
+```
+
+Add `--include-all-scores` when tuning thresholds.
+
 ## Session mode
 
 For editor/app integrations, keep one client process alive:
 
 ```bash
-kokoro-rocm session
+local-ai-tools session
 ```
 
 `session` reads newline-delimited JSON from stdin and writes newline-delimited
@@ -77,14 +104,21 @@ Health example:
 
 ```bash
 printf '{"id":"1","method":"health","params":{}}\n{"id":"2","method":"exit","params":{}}\n' \
-  | kokoro-rocm session
+  | local-ai-tools session
 ```
 
 Synthesis example:
 
 ```bash
 printf '{"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/hello.wav","timings_path":"/tmp/hello.json","voice":"af_sarah","speed":1,"target_wpm":null,"format":"wav"}}\n{"id":"2","method":"exit","params":{}}\n' \
-  | kokoro-rocm session
+  | local-ai-tools session
+```
+
+Selection example:
+
+```bash
+printf '{"id":"1","method":"select","params":{"text":"The deploy passed. The parser failed.","items":[{"id":"failures","question":"What failed?"}]}}\n{"id":"2","method":"exit","params":{}}\n' \
+  | local-ai-tools session
 ```
 
 Typical events:
@@ -101,6 +135,13 @@ Session mode avoids repeated CLI process startup. One-shot commands are kept for
 normal shell use.
 
 ## Nix
+
+Tooling can be installed with mise:
+
+```bash
+mise trust
+mise install
+```
 
 Development:
 
@@ -132,25 +173,25 @@ nix run . -- health --json
 NixOS flake integration:
 
 ```nix
-inputs.kokoro-rocm.url = "github:Anoromi/kokoro-rocm";
+inputs.local-ai-tools.url = "github:Anoromi/local-ai-tools";
 ```
 
 Home Manager package:
 
 ```nix
-inputs.kokoro-rocm.packages.${pkgs.stdenv.hostPlatform.system}.default
+inputs.local-ai-tools.packages.${pkgs.stdenv.hostPlatform.system}.default
 ```
 
 ## Protocol package
 
-`@anoromi/kokoro-rocm-protocol` exports Effect Schema definitions, inferred
+`@anoromi/local-ai-tools-protocol` exports Effect Schema definitions, inferred
 TypeScript types, and JSON line helpers for both the daemon socket protocol and
 the session NDJSON protocol.
 
 Install:
 
 ```bash
-npm install @anoromi/kokoro-rocm-protocol effect@4.0.0-beta.45
+npm install @anoromi/local-ai-tools-protocol effect@4.0.0-beta.45
 ```
 
 Example:
@@ -161,7 +202,7 @@ import {
   decodeSessionLine,
   eventLine,
   requestLine,
-} from "@anoromi/kokoro-rocm-protocol"
+} from "@anoromi/local-ai-tools-protocol"
 
 const request = decodeSessionLine(
   '{"id":"1","method":"health","params":{}}'
@@ -184,15 +225,15 @@ After installing through Home Manager or `nix run`, prepare the machine-local
 runtime:
 
 ```bash
-kokoro-rocm setup
-kokoro-rocm health
-printf "Hello" | kokoro-rocm -o /tmp/hello.wav
+local-ai-tools setup
+local-ai-tools health
+printf "Hello" | local-ai-tools -o /tmp/hello.wav
 ```
 
 `setup` creates:
 
 ```text
-~/.local/share/kokoro-rocm/
+~/.local/share/local-ai-tools/
   .venv/
   env
   models/v1_0/kokoro-v1_0.pth
@@ -203,14 +244,14 @@ printf "Hello" | kokoro-rocm -o /tmp/hello.wav
 By default it installs PyTorch from the official ROCm 6.4 wheel index:
 
 ```bash
-kokoro-rocm setup --torch rocm6.4
+local-ai-tools setup --torch rocm6.4
 ```
 
 Other setup modes:
 
 ```bash
-kokoro-rocm setup --torch rocm6.3
-kokoro-rocm setup --torch existing --python-path /path/to/venv/bin/python
+local-ai-tools setup --torch rocm6.3
+local-ai-tools setup --torch existing --python-path /path/to/venv/bin/python
 ```
 
 `setup` does not install AMD GPU drivers. Before setup, the machine should
@@ -227,9 +268,9 @@ On Ubuntu, the user usually needs access to the `render` and `video` groups.
 Run diagnostics without starting the daemon:
 
 ```bash
-kokoro-rocm health
-kokoro-rocm health --json
-kokoro-rocm health --probe-synthesis
+local-ai-tools health
+local-ai-tools health --json
+local-ai-tools health --probe-synthesis
 ```
 
 Health checks cover:
@@ -248,31 +289,41 @@ Health checks cover:
 The Nix package exposes:
 
 ```text
-kokoro-rocm         TypeScript/Bun CLI
-kokoro-rocm-python  Python helper used for serve/setup/health
+local-ai-tools         TypeScript/Bun CLI
+local-ai-tools-python  Python helper used for serve/setup/health
 ```
 
-`kokoro-rocm-python` is not intended as the primary user interface, but it is
+`local-ai-tools-python` is not intended as the primary user interface, but it is
 available for debugging.
 
 ## Runtime assets
 
-If `kokoro-rocm setup` has not been run, the MVP still falls back to local
+If `local-ai-tools setup` has not been run, the MVP still falls back to local
 benchmark assets on this development machine:
 
 ```text
-KOKORO_ROCM_MODEL=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/models/v1_0/kokoro-v1_0.pth
-KOKORO_ROCM_CONFIG=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/models/v1_0/config.json
-KOKORO_ROCM_VOICES_DIR=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/voices/v1_0
-KOKORO_ROCM_DEFAULT_VOICE=af_sarah
-KOKORO_ROCM_PYTHON=/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python
+LOCAL_AI_TOOLS_MODEL=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/models/v1_0/kokoro-v1_0.pth
+LOCAL_AI_TOOLS_CONFIG=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/models/v1_0/config.json
+LOCAL_AI_TOOLS_VOICES_DIR=/tmp/kokoro-bench/api-test/Kokoro-FastAPI/api/src/voices/v1_0
+LOCAL_AI_TOOLS_DEFAULT_VOICE=af_sarah
+LOCAL_AI_TOOLS_PYTHON=/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python
 ```
 
-On another machine, prefer `kokoro-rocm setup`. You can also provide equivalent
-paths through those environment variables. `KOKORO_ROCM_PYTHON` should point at
+On another machine, prefer `local-ai-tools setup`. You can also provide equivalent
+paths through those environment variables. `LOCAL_AI_TOOLS_PYTHON` should point at
 a Python environment with Kokoro, SoundFile, NumPy, and ROCm-enabled PyTorch.
 
 ## ROCm caveat
+
+Kokoro ROCm enables PyTorch's experimental ROCm AOTriton attention path by
+default:
+
+```bash
+TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+```
+
+This environment variable must be set before importing PyTorch. Override it to
+`0` if a specific ROCm/PyTorch build regresses.
 
 The direct PyTorch path sets:
 
@@ -302,7 +353,7 @@ model-predicted timings, not external forced alignment.
 Write engine-side per-step performance timings with:
 
 ```bash
-kokoro-rocm say -o speech.wav --precision fp16 --profile
+local-ai-tools say -o speech.wav --precision fp16 --profile
 ```
 
 By default this writes `speech.profile.json` next to `speech.wav` and

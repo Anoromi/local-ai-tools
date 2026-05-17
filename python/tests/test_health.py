@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from kokoro_rocm import health
+from local_ai_tools import health
 
 
 def test_recommendation_for_failed_pytorch():

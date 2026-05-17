@@ -1,12 +1,17 @@
 [project]
-name = "kokoro-rocm"
+name = "local-ai-tools"
 version = "0.1.0"
-description = "Local Kokoro PyTorch ROCm daemon and stdin-first CLI"
+description = "Local AI tools daemon and stdin-first CLI"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+  "torch",
+  "transformers<5",
+  "sentencepiece",
+  "protobuf",
+]
 
 [project.scripts]
-kokoro-rocm = "kokoro_rocm.cli:main"
+local-ai-tools = "local_ai_tools.cli:main"
 
 [dependency-groups]
 dev = [

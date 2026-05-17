@@ -20,13 +20,13 @@ export interface SayOptions {
 export function runSay(options: SayOptions): Effect.Effect<void> {
   return Effect.promise(async () => {
     if (!options.output) {
-      printError("kokoro-rocm: -o/--output is required")
+      printError("local-ai-tools: -o/--output is required")
       process.exitCode = EXIT_USAGE
       return
     }
     const text = (await readAllStdin()).trim()
     if (!text) {
-      printError("kokoro-rocm: stdin text is empty")
+      printError("local-ai-tools: stdin text is empty")
       process.exitCode = EXIT_USAGE
       return
     }
@@ -38,7 +38,7 @@ export function runSay(options: SayOptions): Effect.Effect<void> {
     try {
       await ensureDaemon(options.socket)
     } catch (error) {
-      printError(`kokoro-rocm: ${error instanceof Error ? error.message : String(error)}`)
+      printError(`local-ai-tools: ${error instanceof Error ? error.message : String(error)}`)
       process.exitCode = EXIT_DAEMON
       return
     }
@@ -59,13 +59,13 @@ export function runSay(options: SayOptions): Effect.Effect<void> {
       3_600_000
     )
     if (response.ok === false) {
-      printError(`kokoro-rocm: ${response.error.message}`)
+      printError(`local-ai-tools: ${response.error.message}`)
       if (response.error.detail) printError(response.error.detail)
       process.exitCode = EXIT_SYNTHESIS
       return
     }
     if (!("result" in response)) {
-      printError("kokoro-rocm: daemon returned a stream event for non-stream request")
+      printError("local-ai-tools: daemon returned a stream event for non-stream request")
       process.exitCode = EXIT_PROTOCOL
       return
     }

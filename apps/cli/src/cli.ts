@@ -8,6 +8,7 @@ import { runServe } from "./commands/serve"
 import { runSetup } from "./commands/setup"
 import { runHealth } from "./commands/health"
 import { runSession } from "./commands/session"
+import { parseSelectArgv, runSelect } from "./commands/select"
 import { CliExit, EXIT_USAGE } from "./commands/exit-codes"
 
 const VERSION = "0.1.0"
@@ -23,6 +24,7 @@ const precisionFlag = Flag.choice("precision", ["fp32", "fp16"] as const).pipe(F
 const profileFlag = Flag.boolean("profile")
 const profileOutputFlag = optionalString("profile-output")
 const socketFlag = optionalString("socket")
+const thresholdFlag = Flag.float("threshold").pipe(Flag.withDefault(0.5))
 
 const sayConfig = {
   output: outputFlag,
@@ -51,6 +53,28 @@ const say = Command.make("say", sayConfig, (args) =>
 const status = Command.make("status", { socket: socketFlag }, (args) => runStatus(optionValue(args.socket)))
 const stop = Command.make("stop", { socket: socketFlag }, (args) => runStop(optionValue(args.socket)))
 const session = Command.make("session", { socket: socketFlag }, (args) => runSession(optionValue(args.socket)))
+const select = Command.make(
+  "select",
+  {
+    question: optionalString("question"),
+    input: optionalString("input"),
+    output: outputFlag,
+    threshold: thresholdFlag,
+    language: Flag.choice("language", ["auto", "en", "zh"] as const).pipe(Flag.withDefault("auto")),
+    includeAllScores: Flag.boolean("include-all-scores"),
+    socket: socketFlag
+  },
+  (args) =>
+    runSelect({
+      questions: optionValue(args.question) ? [{ question: optionValue(args.question)! }] : [],
+      input: optionValue(args.input),
+      output: optionValue(args.output),
+      threshold: args.threshold,
+      language: args.language,
+      includeAllScores: args.includeAllScores,
+      socket: optionValue(args.socket)
+    })
+)
 
 const serve = Command.make(
   "serve",
@@ -113,9 +137,9 @@ const health = Command.make(
     )
 )
 
-const root = Command.make("kokoro-rocm").pipe(Command.withSubcommands([say, session, serve, status, stop, setup, health]))
+const root = Command.make("local-ai-tools").pipe(Command.withSubcommands([say, select, session, serve, status, stop, setup, health]))
 
-const defaultSay = Command.make("kokoro-rocm", sayConfig, (args) =>
+const defaultSay = Command.make("local-ai-tools", sayConfig, (args) =>
   runSay({
     output: optionValue(args.output),
     voice: args.voice,
@@ -129,6 +153,19 @@ const defaultSay = Command.make("kokoro-rocm", sayConfig, (args) =>
 )
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+  if (argv[0] === "select" && !argv.includes("--help") && !argv.includes("-h")) {
+    try {
+      const options = parseSelectArgv(argv.slice(1))
+      if (options) {
+        await Effect.runPromise(runSelect(options).pipe(Effect.provide(BunServices.layer)))
+        return
+      }
+    } catch (error) {
+      process.stderr.write(`local-ai-tools: ${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = EXIT_USAGE
+      return
+    }
+  }
   const { command, args } = selectCommand(argv)
   const run = Command.runWith(command, { version: VERSION })
   try {
@@ -147,7 +184,7 @@ function selectCommand(argv: readonly string[]) {
   const first = argv[0]
   if (!first) return { command: defaultSay, args: argv }
   if (first === "--help" || first === "-h" || first === "--version" || first === "-v") return { command: root, args: argv }
-  const subcommands = { say, session, serve, status, stop, setup, health } as const
+  const subcommands = { say, select, session, serve, status, stop, setup, health } as const
   if (first in subcommands) {
     return { command: subcommands[first as keyof typeof subcommands], args: argv.slice(1) }
   }

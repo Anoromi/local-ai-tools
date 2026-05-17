@@ -19,6 +19,28 @@ describe("cli contract", () => {
     expect(result.stdout).toContain("--profile-output")
   })
 
+  test("select help lists selection flags", () => {
+    const result = spawnSync(cli[0], [...cli.slice(1), "select", "--help"], { encoding: "utf8" })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("--question")
+    expect(result.stdout).toContain("--input")
+    expect(result.stdout).toContain("--output")
+    expect(result.stdout).toContain("--threshold")
+    expect(result.stdout).toContain("--include-all-scores")
+  })
+
+  test("select rejects empty stdin", () => {
+    const result = spawnSync(cli[0], [...cli.slice(1), "select", "--question", "What failed?"], { input: "", encoding: "utf8" })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("stdin text is empty")
+  })
+
+  test("select rejects empty questions", () => {
+    const result = spawnSync(cli[0], [...cli.slice(1), "select"], { input: "Hello.", encoding: "utf8" })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("at least one --question")
+  })
+
   test("default say accepts profile flags", () => {
     const result = spawnSync(cli[0], [...cli.slice(1), "--profile", "--profile-output", "/tmp/a.profile.json"], {
       input: "Hello",

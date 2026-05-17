@@ -4,7 +4,7 @@ import pytest
 
 import json
 
-from kokoro_rocm.protocol import ProtocolError, parse_request, request_line, stream_event, validate_synthesize
+from local_ai_tools.protocol import ProtocolError, parse_request, request_line, stream_event, validate_select, validate_synthesize
 
 
 def test_parse_request():
@@ -55,6 +55,25 @@ def test_validate_synthesize_rejects_invalid_profile_path():
 def test_validate_synthesize_rejects_invalid_precision():
     with pytest.raises(ProtocolError):
         validate_synthesize({"text": "hello", "output_path": "/tmp/a.wav", "timings_path": "/tmp/a.json", "precision": "bf16"})
+
+
+def test_validate_select_requires_text():
+    with pytest.raises(ProtocolError):
+        validate_select({"items": [{"question": "What failed?"}]})
+
+
+def test_validate_select_requires_items():
+    with pytest.raises(ProtocolError):
+        validate_select({"text": "hello"})
+
+
+def test_validate_select_requires_question():
+    with pytest.raises(ProtocolError):
+        validate_select({"text": "hello", "items": [{"question": ""}]})
+
+
+def test_validate_select_accepts_defaults():
+    validate_select({"text": "hello", "items": [{"question": "What happened?"}]})
 
 
 def test_stream_event_shape():

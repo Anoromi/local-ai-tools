@@ -6,24 +6,29 @@ import os
 import signal
 import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .engine import KokoroEngine
 from .paths import log_path, pid_path, socket_path
-from .protocol import failure, parse_request, stream_event, success, validate_synthesize
+from .protocol import failure, parse_request, stream_event, success, validate_select, validate_synthesize
+from .selection import MODEL_ID, ZillizSelector, selection_items
+
+if TYPE_CHECKING:
+    from .engine import KokoroEngine
 
 
-class KokoroDaemon:
+class LocalAiDaemon:
     def __init__(self, socket: Path) -> None:
         self.socket = socket
-        self.engine: KokoroEngine | None = None
-        self.lock = asyncio.Lock()
+        self.kokoro: KokoroEngine | None = None
+        self.selector: ZillizSelector | None = None
+        self.kokoro_lock = asyncio.Lock()
+        self.selector_lock = asyncio.Lock()
         self.server: asyncio.AbstractServer | None = None
 
     async def start(self) -> None:
         self.socket.parent.mkdir(parents=True, exist_ok=True)
         if self.socket.exists():
             self.socket.unlink()
-        self.engine = await asyncio.to_thread(KokoroEngine)
         self.server = await asyncio.start_unix_server(self.handle_client, path=str(self.socket))
         self.socket.chmod(0o600)
         pid_path().write_text(str(os.getpid()))
@@ -41,7 +46,7 @@ class KokoroDaemon:
             request = parse_request(line)
             request_id = request.id
             if request.method == "health":
-                writer.write(success(request.id, {"status": "ok", "pid": os.getpid(), "model_loaded": self.engine is not None}).encode())
+                writer.write(success(request.id, self._health()).encode())
             elif request.method == "shutdown":
                 writer.write(success(request.id, {"status": "shutting_down"}).encode())
                 await writer.drain()
@@ -49,7 +54,7 @@ class KokoroDaemon:
                 return
             elif request.method == "synthesize":
                 validate_synthesize(request.params)
-                async with self.lock:
+                async with self.kokoro_lock:
                     result = await asyncio.to_thread(self._synthesize, request.params)
                 writer.write(success(request.id, result).encode())
             elif request.method == "synthesize_stream":
@@ -61,9 +66,21 @@ class KokoroDaemon:
                 def emit(data: dict) -> None:
                     loop.call_soon_threadsafe(writer.write, stream_event(request.id, data.get("event", "chunk"), data).encode())
 
-                async with self.lock:
+                async with self.kokoro_lock:
                     result = await asyncio.to_thread(self._synthesize, request.params, emit)
                 await writer.drain()
+                writer.write(success(request.id, result).encode())
+            elif request.method == "select":
+                validate_select(request.params)
+                async with self.selector_lock:
+                    result = await asyncio.to_thread(self._select, request.params)
+                writer.write(success(request.id, result).encode())
+            elif request.method == "select_stream":
+                validate_select(request.params)
+                writer.write(stream_event(request.id, "started", {}).encode())
+                await writer.drain()
+                async with self.selector_lock:
+                    result = await asyncio.to_thread(self._select, request.params)
                 writer.write(success(request.id, result).encode())
             else:
                 writer.write(failure(request.id, "protocol", f"unknown method: {request.method}").encode())
@@ -76,9 +93,11 @@ class KokoroDaemon:
             await writer.wait_closed()
 
     def _synthesize(self, params: dict, on_event=None) -> dict:
-        if self.engine is None:
-            raise RuntimeError("engine is not loaded")
-        return self.engine.synthesize(
+        if self.kokoro is None:
+            from .engine import KokoroEngine
+
+            self.kokoro = KokoroEngine()
+        return self.kokoro.synthesize(
             text=params["text"],
             output_path=Path(params["output_path"]),
             timings_path=Path(params["timings_path"]),
@@ -89,6 +108,26 @@ class KokoroDaemon:
             precision=params.get("precision") or "fp32",
             on_event=on_event,
         )
+
+    def _select(self, params: dict) -> dict:
+        if self.selector is None:
+            self.selector = ZillizSelector()
+        return self.selector.select(
+            text=params["text"],
+            items=selection_items(params["items"]),
+            language=params.get("language") or "auto",
+            include_all_scores=bool(params.get("include_all_scores", False)),
+        )
+
+    def _health(self) -> dict:
+        return {
+            "status": "ok",
+            "pid": os.getpid(),
+            "tools": {
+                "tts": {"loaded": self.kokoro is not None},
+                "selection": {"loaded": self.selector is not None, "model": self.selector.model_id if self.selector else MODEL_ID},
+            },
+        }
 
 
 def _setup_logging() -> None:
@@ -103,7 +142,7 @@ def run_server(socket: Path | None = None, foreground: bool = False) -> None:
     if not foreground:
         _setup_logging()
     sock = socket or socket_path()
-    daemon = KokoroDaemon(sock)
+    daemon = LocalAiDaemon(sock)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from kokoro_rocm import setup
+from local_ai_tools import setup
 
 
 def test_torch_indexes():
@@ -22,8 +22,8 @@ def test_write_env(tmp_path):
     env_file = tmp_path / "env"
     setup.write_env(env_file, Path("/venv/bin/python"), Path("/m.pth"), Path("/config.json"), Path("/voices"), "af_sarah")
     values = dict(line.split("=", 1) for line in env_file.read_text().splitlines() if line)
-    assert values["KOKORO_ROCM_PYTHON"] == "/venv/bin/python"
-    assert values["KOKORO_ROCM_DEFAULT_VOICE"] == "af_sarah"
+    assert values["LOCAL_AI_TOOLS_PYTHON"] == "/venv/bin/python"
+    assert values["LOCAL_AI_TOOLS_DEFAULT_VOICE"] == "af_sarah"
 
 
 def test_validate_assets_rejects_missing(tmp_path):

@@ -1,19 +1,19 @@
 {
-  "name": "@anoromi/kokoro-rocm-protocol",
-  "version": "0.1.0",
+  "name": "@anoromi/local-ai-tools-protocol",
+  "version": "0.3.0",
   "private": false,
   "type": "module",
-  "description": "Effect Schema protocol definitions for kokoro-rocm clients",
+  "description": "Effect Schema protocol definitions for local-ai-tools clients",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Anoromi/kokoro-rocm.git",
+    "url": "git+https://github.com/Anoromi/local-ai-tools.git",
     "directory": "packages/protocol"
   },
   "bugs": {
-    "url": "https://github.com/Anoromi/kokoro-rocm/issues"
+    "url": "https://github.com/Anoromi/local-ai-tools/issues"
   },
-  "homepage": "https://github.com/Anoromi/kokoro-rocm/tree/main/packages/protocol#readme",
+  "homepage": "https://github.com/Anoromi/local-ai-tools/tree/main/packages/protocol#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -32,7 +32,9 @@
       "import": "./dist/encode.mjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsdown src/index.ts src/schema.ts src/encode.ts --format esm --dts --clean",

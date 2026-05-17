@@ -1,6 +1,6 @@
-# @anoromi/kokoro-rocm-protocol
+# @anoromi/local-ai-tools-protocol
 
-Effect Schema definitions and JSON line helpers for `kokoro-rocm` clients.
+Effect Schema definitions and JSON line helpers for `local-ai-tools` clients.
 
 This package contains only the reusable protocol surface:
 
@@ -16,7 +16,7 @@ resolution, or CLI code.
 ## Install
 
 ```bash
-npm install @anoromi/kokoro-rocm-protocol effect@4.0.0-beta.45
+npm install @anoromi/local-ai-tools-protocol effect@4.0.0-beta.45
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ import {
   decodeSessionLine,
   eventLine,
   requestLine,
-} from "@anoromi/kokoro-rocm-protocol"
+} from "@anoromi/local-ai-tools-protocol"
 
 const request = decodeSessionLine(
   '{"id":"1","method":"health","params":{}}'
@@ -48,6 +48,12 @@ const daemonResponse = decodeDaemonLine(
 {"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/hello.wav","timings_path":"/tmp/hello.json","voice":"af_sarah","speed":1,"target_wpm":null,"format":"wav"}}
 ```
 
+Selection requests use one shared text and many question items:
+
+```json
+{"id":"2","method":"select","params":{"text":"The deploy passed. The parser failed.","items":[{"id":"failures","question":"What failed?","threshold":0.5}],"language":"auto","include_all_scores":false}}
+```
+
 Common session events:
 
 ```json
@@ -64,4 +70,4 @@ This package uses Effect 4 schemas and declares `effect@4.0.0-beta.45` as a peer
 dependency.
 
 Generated `dist/` files are produced during package build and publish. They are
-not committed in the `kokoro-rocm` monorepo.
+not committed in the `local-ai-tools` monorepo.

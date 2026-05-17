@@ -48,9 +48,9 @@ export async function tryHealth(socket?: string | null): Promise<{ ok: true; pid
 function startDaemon(socket?: string | null): void {
   const python = backendPython()
   if (!existsSync(python)) {
-    throw new SocketClientError(`backend Python is missing: ${python}. Run: kokoro-rocm setup`)
+    throw new SocketClientError(`backend Python is missing: ${python}. Run: local-ai-tools setup`)
   }
-  const args = ["-m", "kokoro_rocm", "serve", "--socket", socketPath(socket)]
+  const args = ["-m", "local_ai_tools", "serve", "--socket", socketPath(socket)]
   const log = logPath()
   const fd = openSync(log, "a", 0o600)
   const env = rocmEnv({

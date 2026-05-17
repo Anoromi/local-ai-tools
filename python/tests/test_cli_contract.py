@@ -1,4 +1,4 @@
-from kokoro_rocm.cli import build_parser
+from local_ai_tools.cli import build_parser
 
 
 def test_default_say_parser_accepts_output():

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeSessionLine, eventLine } from "@anoromi/kokoro-rocm-protocol"
+import { decodeSessionLine, eventLine } from "@anoromi/local-ai-tools-protocol"
 
 describe("session protocol", () => {
   test("health request decodes", () => {

@@ -23,11 +23,20 @@ EXIT_HEALTH = 7
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="kokoro-rocm")
+    parser = argparse.ArgumentParser(prog="local-ai-tools")
     sub = parser.add_subparsers(dest="command")
 
     say = sub.add_parser("say")
     add_say_args(say)
+
+    select = sub.add_parser("select")
+    select.add_argument("--question", action="append", default=[])
+    select.add_argument("--input")
+    select.add_argument("-o", "--output")
+    select.add_argument("--threshold", type=float, default=0.5)
+    select.add_argument("--language", choices=["auto", "en", "zh"], default="auto")
+    select.add_argument("--include-all-scores", action="store_true")
+    select.add_argument("--socket")
 
     serve = sub.add_parser("serve")
     serve.add_argument("--foreground", action="store_true")
@@ -50,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--model-url")
     setup.add_argument("--config-url")
     setup.add_argument("--voice-url")
+    setup.add_argument("--tool", choices=["kokoro", "selection", "all"], default="all")
 
     health = sub.add_parser("health")
     health.add_argument("--json", action="store_true")
@@ -96,21 +106,23 @@ def main(argv: list[str] | None = None) -> int:
         return run_health(args)
     if command == "say":
         return say(args)
+    if command == "select":
+        return select_text(args)
     parser.print_help(sys.stderr)
     return EXIT_USAGE
 
 
 def say(args) -> int:
     if not args.output:
-        print("kokoro-rocm: -o/--output is required", file=sys.stderr)
+        print("local-ai-tools: -o/--output is required", file=sys.stderr)
         return EXIT_USAGE
     try:
         text = sys.stdin.read()
     except UnicodeDecodeError as exc:
-        print(f"kokoro-rocm: failed to read UTF-8 stdin: {exc}", file=sys.stderr)
+        print(f"local-ai-tools: failed to read UTF-8 stdin: {exc}", file=sys.stderr)
         return EXIT_USAGE
     if not text.strip():
-        print("kokoro-rocm: stdin text is empty", file=sys.stderr)
+        print("local-ai-tools: stdin text is empty", file=sys.stderr)
         return EXIT_USAGE
     output = Path(args.output).expanduser().resolve()
     timings = sidecar_path(output)
@@ -134,17 +146,74 @@ def say(args) -> int:
             timeout=3600,
         )
     except RuntimeError as exc:
-        print(f"kokoro-rocm: {exc}", file=sys.stderr)
+        print(f"local-ai-tools: {exc}", file=sys.stderr)
         return EXIT_DAEMON
     if not response.get("ok"):
         error = response.get("error", {})
-        print(f"kokoro-rocm: {error.get('message', 'synthesis failed')}", file=sys.stderr)
+        print(f"local-ai-tools: {error.get('message', 'synthesis failed')}", file=sys.stderr)
         detail = error.get("detail")
         if detail:
             print(detail, file=sys.stderr)
         return EXIT_SYNTHESIS
     result = response["result"]
     print(f"wrote {result['output_path']} and {result['timings_path']} in {result['total_seconds']:.2f}s")
+    return 0
+
+
+def select_text(args) -> int:
+    try:
+        text = sys.stdin.read()
+    except UnicodeDecodeError as exc:
+        print(f"local-ai-tools: failed to read UTF-8 stdin: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if not text.strip():
+        print("local-ai-tools: stdin text is empty", file=sys.stderr)
+        return EXIT_USAGE
+    items = [{"question": question, "threshold": args.threshold} for question in args.question if question.strip()]
+    if args.input:
+        data = json.loads(Path(args.input).expanduser().resolve().read_text())
+        for item in data.get("questions", []):
+            if str(item.get("question", "")).strip():
+                items.append(
+                    {
+                        "id": item.get("id"),
+                        "question": item["question"],
+                        "threshold": item.get("threshold", args.threshold),
+                    }
+                )
+    if not items:
+        print("local-ai-tools: at least one --question or --input question is required", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        ensure_daemon(args.socket)
+        response = call(
+            args.socket,
+            "select",
+            {
+                "text": text.strip(),
+                "items": items,
+                "language": args.language,
+                "include_all_scores": args.include_all_scores,
+            },
+            timeout=3600,
+        )
+    except RuntimeError as exc:
+        print(f"local-ai-tools: {exc}", file=sys.stderr)
+        return EXIT_DAEMON
+    if not response.get("ok"):
+        error = response.get("error", {})
+        print(f"local-ai-tools: {error.get('message', 'selection failed')}", file=sys.stderr)
+        detail = error.get("detail")
+        if detail:
+            print(detail, file=sys.stderr)
+        return EXIT_SYNTHESIS
+    output = json.dumps(response["result"], indent=2) + "\n"
+    if args.output:
+        path = Path(args.output).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(output)
+    else:
+        print(output, end="")
     return 0
 
 
@@ -201,11 +270,11 @@ def cleanup_stale_socket(sock: str | None = None) -> None:
 def start_daemon(sock: str | None = None) -> None:
     python = env.backend_python()
     if not python.exists():
-        raise RuntimeError(f"backend Python is missing: {python}. Run: kokoro-rocm setup")
+        raise RuntimeError(f"backend Python is missing: {python}. Run: local-ai-tools setup")
     pid_file = pid_path()
     log = log_path()
     log.parent.mkdir(parents=True, exist_ok=True)
-    args = [str(python), "-m", "kokoro_rocm", "serve"]
+    args = [str(python), "-m", "local_ai_tools", "serve"]
     if sock:
         args += ["--socket", str(socket_path(sock))]
     env_map = env.rocm_env()

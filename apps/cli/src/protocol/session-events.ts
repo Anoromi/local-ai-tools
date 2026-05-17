@@ -1,5 +1,5 @@
-import { eventLine } from "@anoromi/kokoro-rocm-protocol"
-import type { ChunkPayload, ErrorPayload, SessionEvent } from "@anoromi/kokoro-rocm-protocol"
+import { eventLine } from "@anoromi/local-ai-tools-protocol"
+import type { ChunkPayload, ErrorPayload, SessionEvent } from "@anoromi/local-ai-tools-protocol"
 
 export function emitEvent(event: SessionEvent): void {
   process.stdout.write(eventLine(event))

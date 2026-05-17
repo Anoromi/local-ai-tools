@@ -61,6 +61,33 @@ def validate_synthesize(params: dict[str, Any]) -> None:
         raise ProtocolError("precision must be fp32 or fp16")
 
 
+def validate_select(params: dict[str, Any]) -> None:
+    text = params.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ProtocolError("text is required")
+    items = params.get("items")
+    if not isinstance(items, list) or not items:
+        raise ProtocolError("items must be a non-empty list")
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise ProtocolError(f"items[{index}] must be an object")
+        item_id = item.get("id")
+        if item_id is not None and not isinstance(item_id, str):
+            raise ProtocolError(f"items[{index}].id must be a string")
+        question = item.get("question")
+        if not isinstance(question, str) or not question.strip():
+            raise ProtocolError(f"items[{index}].question is required")
+        threshold = item.get("threshold", 0.5)
+        if not isinstance(threshold, (int, float)) or threshold < 0 or threshold > 1:
+            raise ProtocolError(f"items[{index}].threshold must be between 0 and 1")
+    language = params.get("language", "auto")
+    if language not in ("auto", "en", "zh"):
+        raise ProtocolError("language must be auto, en, or zh")
+    include_all_scores = params.get("include_all_scores", False)
+    if not isinstance(include_all_scores, bool):
+        raise ProtocolError("include_all_scores must be a boolean")
+
+
 def success(request_id: str, result: dict[str, Any]) -> str:
     return json.dumps({"id": request_id, "ok": True, "result": result}, separators=(",", ":")) + "\n"
 

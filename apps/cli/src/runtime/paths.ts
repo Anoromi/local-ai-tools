@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os"
 import { dirname, resolve } from "node:path"
 
 export function runtimeDir(env: NodeJS.ProcessEnv = process.env): string {
-  const root = env.XDG_RUNTIME_DIR ? `${env.XDG_RUNTIME_DIR}/kokoro-rocm` : `${tmpdir()}/kokoro-rocm-${process.getuid?.() ?? "user"}`
+  const root = env.XDG_RUNTIME_DIR ? `${env.XDG_RUNTIME_DIR}/local-ai-tools` : `${tmpdir()}/local-ai-tools-${process.getuid?.() ?? "user"}`
   mkdirSync(root, { recursive: true })
   try {
     chmodSync(root, 0o700)
@@ -14,11 +14,11 @@ export function runtimeDir(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 export function socketPath(explicit?: string | null, env: NodeJS.ProcessEnv = process.env): string {
-  return explicit || env.KOKORO_ROCM_SOCKET || `${runtimeDir(env)}/kokoro.sock`
+  return explicit || env.LOCAL_AI_TOOLS_SOCKET || `${runtimeDir(env)}/local-ai-tools.sock`
 }
 
 export function pidPath(env: NodeJS.ProcessEnv = process.env): string {
-  return `${runtimeDir(env)}/kokoro.pid`
+  return `${runtimeDir(env)}/local-ai-tools.pid`
 }
 
 export function logPath(env: NodeJS.ProcessEnv = process.env): string {

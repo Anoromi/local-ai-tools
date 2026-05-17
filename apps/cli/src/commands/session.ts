@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { callOnce, callStream } from "../protocol/socket-client"
-import { decodeSessionLine, decodeSynthesizeParams } from "@anoromi/kokoro-rocm-protocol"
+import { decodeSelectParams, decodeSessionLine, decodeSynthesizeParams } from "@anoromi/local-ai-tools-protocol"
 import * as Events from "../protocol/session-events"
 import { ensureDaemon } from "../runtime/daemon"
 import { stdinLines } from "../runtime/stdin"
@@ -35,6 +35,10 @@ export function runSession(socket?: string | null): Effect.Effect<void> {
         queue = queue.then(() => handleSynthesize(request.id, request.params, socket))
         continue
       }
+      if (request.method === "select") {
+        queue = queue.then(() => handleSelect(request.id, request.params, socket))
+        continue
+      }
       void handleControl(request.id, request.method, socket)
     }
     await queue
@@ -63,6 +67,38 @@ async function handleControl(id: string, method: "health" | "shutdownDaemon", so
     Events.emitEvent(
       Events.errorEvent(id, {
         stage: "daemon",
+        message: error instanceof Error ? error.message : String(error),
+        detail: ""
+      })
+    )
+  }
+}
+
+async function handleSelect(id: string, params: Record<string, unknown>, socket?: string | null): Promise<void> {
+  try {
+    const select = decodeSelectParams(params)
+    await ensureDaemon(socket, {
+      starting: () => Events.emitEvent(Events.daemonStarting(id)),
+      ready: (pid) => Events.emitEvent(Events.daemonReady(id, pid))
+    })
+    const response = await callOnce({ socket }, "select", select, 3_600_000)
+    if (response.ok === false) {
+      Events.emitEvent(Events.errorEvent(id, response.error))
+    } else if ("result" in response) {
+      Events.emitEvent(Events.finished(id, response.result))
+    } else {
+      Events.emitEvent(
+        Events.errorEvent(id, {
+          stage: "protocol",
+          message: "daemon returned stream event for selection request",
+          detail: ""
+        })
+      )
+    }
+  } catch (error) {
+    Events.emitEvent(
+      Events.errorEvent(id, {
+        stage: "session",
         message: error instanceof Error ? error.message : String(error),
         detail: ""
       })

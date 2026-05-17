@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 
 export function pythonHelper(): string {
-  return process.env.KOKORO_ROCM_PYTHON_HELPER || "kokoro-rocm-python"
+  return process.env.LOCAL_AI_TOOLS_PYTHON_HELPER || "local-ai-tools-python"
 }
 
 export async function delegateToPython(args: readonly string[]): Promise<number> {

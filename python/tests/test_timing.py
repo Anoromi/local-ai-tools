@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from kokoro_rocm.timing import PROFILE_TIMING_KEYS, actual_wpm, profile_document, scale_timings, sidecar_document, synthesis_text, word_count
+from local_ai_tools.timing import PROFILE_TIMING_KEYS, actual_wpm, profile_document, scale_timings, sidecar_document, synthesis_text, word_count
 
 
 def test_word_count_handles_contractions():

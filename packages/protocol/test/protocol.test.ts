@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeDaemonLine, decodeSessionLine, decodeSynthesizeParams, eventLine } from "@anoromi/kokoro-rocm-protocol"
+import { decodeDaemonLine, decodeSelectParams, decodeSessionLine, decodeSynthesizeParams, eventLine } from "@anoromi/local-ai-tools-protocol"
 
 describe("protocol schemas", () => {
   test("valid synthesize request decodes", () => {
@@ -7,6 +7,24 @@ describe("protocol schemas", () => {
       '{"id":"1","method":"synthesize","params":{"text":"Hello","output_path":"/tmp/a.wav","timings_path":"/tmp/a.json","voice":"af_sarah","speed":1,"target_wpm":null,"precision":"fp16","format":"wav"}}'
     )
     expect(request.method).toBe("synthesize")
+  })
+
+  test("valid select request decodes", () => {
+    const request = decodeSessionLine(
+      '{"id":"1","method":"select","params":{"text":"Hello. Bye.","items":[{"question":"What happened?"}]}}'
+    )
+    expect(request.method).toBe("select")
+  })
+
+  test("select params default threshold and language", () => {
+    const params = decodeSelectParams({ text: "Hello.", items: [{ question: "What happened?" }] })
+    expect(params.language).toBe("auto")
+    expect(params.include_all_scores).toBe(false)
+    expect(params.items[0]?.threshold).toBe(0.5)
+  })
+
+  test("invalid select threshold fails", () => {
+    expect(() => decodeSelectParams({ text: "Hello.", items: [{ question: "What happened?", threshold: 2 }] })).toThrow()
   })
 
   test("synthesize params default to fp32", () => {

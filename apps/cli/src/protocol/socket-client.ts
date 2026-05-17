@@ -1,6 +1,6 @@
 import { Socket } from "node:net"
-import { requestLine, decodeDaemonLine } from "@anoromi/kokoro-rocm-protocol"
-import type { DaemonMessage, DaemonSuccessResponse, DaemonStreamEvent } from "@anoromi/kokoro-rocm-protocol"
+import { requestLine, decodeDaemonLine } from "@anoromi/local-ai-tools-protocol"
+import type { DaemonMessage, DaemonSuccessResponse, DaemonStreamEvent } from "@anoromi/local-ai-tools-protocol"
 import { socketPath } from "../runtime/paths"
 
 export class SocketClientError extends Error {

@@ -11,11 +11,11 @@ DEFAULT_PYTHON = "/tmp/kokoro-bench/kokoro-pytorch-rocm/.venv/bin/python"
 
 
 def default_data_dir() -> Path:
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "kokoro-rocm"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "local-ai-tools"
 
 
 def config_env_file() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "kokoro-rocm" / "env"
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "local-ai-tools" / "env"
 
 
 def user_env_file(data_dir: Path | None = None) -> Path:
@@ -53,35 +53,35 @@ def configured_value(name: str, fallback: str) -> str:
 def effective_config() -> dict[str, str]:
     env_file, values = discovered_env()
     keys = {
-        "KOKORO_ROCM_PYTHON": DEFAULT_PYTHON,
-        "KOKORO_ROCM_MODEL": DEFAULT_MODEL,
-        "KOKORO_ROCM_CONFIG": DEFAULT_CONFIG,
-        "KOKORO_ROCM_VOICES_DIR": DEFAULT_VOICES_DIR,
-        "KOKORO_ROCM_DEFAULT_VOICE": "af_sarah",
+        "LOCAL_AI_TOOLS_PYTHON": DEFAULT_PYTHON,
+        "LOCAL_AI_TOOLS_MODEL": DEFAULT_MODEL,
+        "LOCAL_AI_TOOLS_CONFIG": DEFAULT_CONFIG,
+        "LOCAL_AI_TOOLS_VOICES_DIR": DEFAULT_VOICES_DIR,
+        "LOCAL_AI_TOOLS_DEFAULT_VOICE": "af_sarah",
     }
     result = {key: os.environ.get(key) or values.get(key) or fallback for key, fallback in keys.items()}
-    result["KOKORO_ROCM_ENV_FILE"] = str(env_file) if env_file else ""
+    result["LOCAL_AI_TOOLS_ENV_FILE"] = str(env_file) if env_file else ""
     return result
 
 
 def backend_python() -> Path:
-    return Path(configured_value("KOKORO_ROCM_PYTHON", DEFAULT_PYTHON))
+    return Path(configured_value("LOCAL_AI_TOOLS_PYTHON", DEFAULT_PYTHON))
 
 
 def model_path() -> Path:
-    return Path(configured_value("KOKORO_ROCM_MODEL", DEFAULT_MODEL))
+    return Path(configured_value("LOCAL_AI_TOOLS_MODEL", DEFAULT_MODEL))
 
 
 def config_path() -> Path:
-    return Path(configured_value("KOKORO_ROCM_CONFIG", DEFAULT_CONFIG))
+    return Path(configured_value("LOCAL_AI_TOOLS_CONFIG", DEFAULT_CONFIG))
 
 
 def voices_dir() -> Path:
-    return Path(configured_value("KOKORO_ROCM_VOICES_DIR", DEFAULT_VOICES_DIR))
+    return Path(configured_value("LOCAL_AI_TOOLS_VOICES_DIR", DEFAULT_VOICES_DIR))
 
 
 def default_voice() -> str:
-    return configured_value("KOKORO_ROCM_DEFAULT_VOICE", "af_sarah")
+    return configured_value("LOCAL_AI_TOOLS_DEFAULT_VOICE", "af_sarah")
 
 
 def voice_path(voice: str) -> Path:
@@ -100,6 +100,12 @@ def rocm_env() -> dict[str, str]:
     env.setdefault("ROCR_VISIBLE_DEVICES", "0")
     env.setdefault("PYTORCH_ROCM_ARCH", "gfx1151")
     env.setdefault("HSA_OVERRIDE_GFX_VERSION", "11.5.1")
+    env.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+    env.setdefault("TORCH_COMPILE_DISABLE", "1")
+    env.setdefault("TORCHDYNAMO_DISABLE", "1")
+    project_transformers = Path("/home/anoromi/code/my/testing-site/text-selection-tunings/.venv/lib/python3.12/site-packages")
+    if project_transformers.exists():
+        env.setdefault("PROJECT_TRANSFORMERS_PATH", str(project_transformers))
     env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     env.setdefault("TOKENIZERS_PARALLELISM", "false")
     return _compiler_include_env(env)

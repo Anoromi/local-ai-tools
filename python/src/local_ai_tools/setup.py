@@ -26,19 +26,20 @@ def run_setup(args) -> int:
     try:
         result = setup(args)
     except Exception as exc:
-        print(f"kokoro-rocm setup failed: {exc}", file=sys.stderr)
+        print(f"local-ai-tools setup failed: {exc}", file=sys.stderr)
         return 6
     print(f"wrote {result['env_file']}")
     print(f"wrote {result['probe_file']}")
     if result["status"] == "ok":
         print("setup ok")
-        print('next: printf "Hello" | kokoro-rocm -o /tmp/hello.wav')
+        print('next: printf "Hello" | local-ai-tools -o /tmp/hello.wav')
         return 0
     print("setup completed but health probe failed", file=sys.stderr)
     return 6
 
 
 def setup(args) -> dict:
+    tool = getattr(args, "tool", "all")
     data_dir = Path(args.data_dir).expanduser().resolve() if args.data_dir else env.default_data_dir()
     venv = data_dir / ".venv"
     model_dir = data_dir / "models" / "v1_0"
@@ -61,25 +62,34 @@ def setup(args) -> dict:
             shutil.rmtree(venv)
         run(["uv", "venv", str(venv), "--python", args.python])
         run(["uv", "pip", "install", "--python", str(python), "torch", "torchvision", "torchaudio", "--index-url", TORCH_INDEXES[args.torch]])
-        run(["uv", "pip", "install", "--python", str(python), "kokoro==0.9.4", "soundfile", "numpy"])
+        packages = ["transformers<5", "sentencepiece", "protobuf"]
+        if tool in ("kokoro", "all"):
+            packages += ["kokoro==0.9.4", "soundfile", "numpy"]
+        run(["uv", "pip", "install", "--python", str(python), *packages])
 
-    stage_from_existing(model, config, voice)
-    if not args.no_download:
-        download(args.model_url or MODEL_URL, model)
-        download(args.config_url or CONFIG_URL, config)
-        download(args.voice_url or VOICE_URL_TEMPLATE.format(voice=args.voice), voice)
+    if tool in ("kokoro", "all"):
+        stage_from_existing(model, config, voice)
+        if not args.no_download:
+            download(args.model_url or MODEL_URL, model)
+            download(args.config_url or CONFIG_URL, config)
+            download(args.voice_url or VOICE_URL_TEMPLATE.format(voice=args.voice), voice)
 
-    validate_assets(python, model, config, voices_dir, voice)
+        validate_assets(python, model, config, voices_dir, voice)
+    if tool in ("selection", "all"):
+        validate_selection_imports(python)
     env_file = env.user_env_file(data_dir)
     write_env(env_file, python, model, config, voices_dir, args.voice)
-    os.environ["KOKORO_ROCM_PYTHON"] = str(python)
-    os.environ["KOKORO_ROCM_MODEL"] = str(model)
-    os.environ["KOKORO_ROCM_CONFIG"] = str(config)
-    os.environ["KOKORO_ROCM_VOICES_DIR"] = str(voices_dir)
-    os.environ["KOKORO_ROCM_DEFAULT_VOICE"] = args.voice
+    os.environ["LOCAL_AI_TOOLS_PYTHON"] = str(python)
+    os.environ["LOCAL_AI_TOOLS_MODEL"] = str(model)
+    os.environ["LOCAL_AI_TOOLS_CONFIG"] = str(config)
+    os.environ["LOCAL_AI_TOOLS_VOICES_DIR"] = str(voices_dir)
+    os.environ["LOCAL_AI_TOOLS_DEFAULT_VOICE"] = args.voice
     probe_file = data_dir / "setup-probe.json"
-    health_args = type("HealthArgs", (), {"socket": None, "probe_synthesis": True, "keep_probe_output": False})()
-    report = build_report(health_args)
+    health_args = type("HealthArgs", (), {"socket": None, "probe_synthesis": tool in ("kokoro", "all"), "keep_probe_output": False})()
+    if tool == "selection":
+        report = {"status": "ok", "checks": {"selection_python": validate_selection_imports(python)}, "recommendations": []}
+    else:
+        report = build_report(health_args)
     probe_file.write_text(json.dumps(report, indent=2))
     return {"status": report["status"], "env_file": str(env_file), "probe_file": str(probe_file)}
 
@@ -116,11 +126,11 @@ def write_env(env_file: Path, python: Path, model: Path, config: Path, voices_di
     env_file.write_text(
         "\n".join(
             [
-                f"KOKORO_ROCM_PYTHON={python}",
-                f"KOKORO_ROCM_MODEL={model}",
-                f"KOKORO_ROCM_CONFIG={config}",
-                f"KOKORO_ROCM_VOICES_DIR={voices_dir}",
-                f"KOKORO_ROCM_DEFAULT_VOICE={voice}",
+                f"LOCAL_AI_TOOLS_PYTHON={python}",
+                f"LOCAL_AI_TOOLS_MODEL={model}",
+                f"LOCAL_AI_TOOLS_CONFIG={config}",
+                f"LOCAL_AI_TOOLS_VOICES_DIR={voices_dir}",
+                f"LOCAL_AI_TOOLS_DEFAULT_VOICE={voice}",
                 "",
             ]
         )
@@ -140,3 +150,8 @@ def validate_assets(python: Path, model: Path, config: Path, voices_dir: Path, v
         raise FileNotFoundError(voices_dir)
     if not voice.exists() or voice.stat().st_size < 10 * 1024:
         raise RuntimeError(f"voice missing or too small: {voice}")
+
+
+def validate_selection_imports(python: Path) -> dict:
+    run([str(python), "-c", "import torch, transformers, sentencepiece, google.protobuf"])
+    return {"ok": True}

@@ -69,13 +69,13 @@ def check_wrapper() -> dict[str, Any]:
 def check_setup_env() -> dict[str, Any]:
     cfg = env.effective_config()
     return {
-        "ok": bool(cfg["KOKORO_ROCM_PYTHON"] and cfg["KOKORO_ROCM_MODEL"] and cfg["KOKORO_ROCM_CONFIG"] and cfg["KOKORO_ROCM_VOICES_DIR"]),
-        "env_file": cfg.get("KOKORO_ROCM_ENV_FILE") or None,
-        "python": cfg["KOKORO_ROCM_PYTHON"],
-        "model": cfg["KOKORO_ROCM_MODEL"],
-        "config": cfg["KOKORO_ROCM_CONFIG"],
-        "voices_dir": cfg["KOKORO_ROCM_VOICES_DIR"],
-        "default_voice": cfg["KOKORO_ROCM_DEFAULT_VOICE"],
+        "ok": bool(cfg["LOCAL_AI_TOOLS_PYTHON"] and cfg["LOCAL_AI_TOOLS_MODEL"] and cfg["LOCAL_AI_TOOLS_CONFIG"] and cfg["LOCAL_AI_TOOLS_VOICES_DIR"]),
+        "env_file": cfg.get("LOCAL_AI_TOOLS_ENV_FILE") or None,
+        "python": cfg["LOCAL_AI_TOOLS_PYTHON"],
+        "model": cfg["LOCAL_AI_TOOLS_MODEL"],
+        "config": cfg["LOCAL_AI_TOOLS_CONFIG"],
+        "voices_dir": cfg["LOCAL_AI_TOOLS_VOICES_DIR"],
+        "default_voice": cfg["LOCAL_AI_TOOLS_DEFAULT_VOICE"],
     }
 
 
@@ -195,7 +195,7 @@ def check_daemon(sock: str | None) -> dict[str, Any]:
 
 
 def check_synthesis_probe(keep_output: bool) -> dict[str, Any]:
-    tmp = tempfile.TemporaryDirectory(prefix="kokoro-rocm-health-")
+    tmp = tempfile.TemporaryDirectory(prefix="local-ai-tools-health-")
     tmpdir = Path(tmp.name)
     code = f"""
 import json, time
@@ -240,14 +240,14 @@ def recommendations(checks: dict[str, dict[str, Any]]) -> list[str]:
         recs.append("Verify your user is in render/video groups where required.")
     if not checks.get("pytorch_rocm", {}).get("ok"):
         recs.append("Verify the machine has a ROCm-supported AMD GPU and a compatible PyTorch ROCm wheel.")
-        recs.append("Try kokoro-rocm setup --torch rocm6.3 if rocm6.4 wheels fail.")
+        recs.append("Try local-ai-tools setup --torch rocm6.3 if rocm6.4 wheels fail.")
     if not checks.get("assets", {}).get("ok"):
-        recs.append("Run kokoro-rocm setup to create the venv and stage Kokoro model assets.")
+        recs.append("Run local-ai-tools setup to create the venv and stage Kokoro model assets.")
     return recs
 
 
 def print_human(report: dict[str, Any]) -> None:
-    print("kokoro-rocm health\n")
+    print("local-ai-tools health\n")
     labels = [
         ("wrapper", "wrapper"),
         ("setup_env", "setup env"),

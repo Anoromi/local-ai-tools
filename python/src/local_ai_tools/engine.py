@@ -69,7 +69,7 @@ class KokoroEngine:
 
     def _warmup(self) -> None:
         try:
-            with tempfile.TemporaryDirectory(prefix="kokoro-rocm-warmup-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="local-ai-tools-warmup-") as tmp:
                 self.synthesize(
                     text=WARMUP_TEXT,
                     output_path=Path(tmp) / "warmup.wav",
@@ -113,7 +113,7 @@ class KokoroEngine:
             raise RuntimeError(f"voice not found: {voice}")
         timings["voice_lookup"] = elapsed_since(started)
 
-        with tempfile.TemporaryDirectory(prefix="kokoro-rocm-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="local-ai-tools-") as tmp:
             tmpdir = Path(tmp)
             native_path = tmpdir / "native.wav"
             final_path = tmpdir / "final.wav"

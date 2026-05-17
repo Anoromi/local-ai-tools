@@ -1,21 +1,21 @@
 {
-  "name": "@anoromi/kokoro-rocm-cli",
-  "version": "0.1.0",
+  "name": "@anoromi/local-ai-tools-cli",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "TypeScript/Bun CLI for kokoro-rocm",
+  "description": "TypeScript/Bun CLI for local-ai-tools",
   "license": "MIT",
   "bin": {
-    "kokoro-rocm": "dist/kokoro-rocm.js"
+    "local-ai-tools": "dist/local-ai-tools.js"
   },
   "scripts": {
-    "build": "bun build src/main.ts --target=bun --outfile dist/kokoro-rocm.js",
+    "build": "bun build src/main.ts --target=bun --outfile dist/local-ai-tools.js",
     "typecheck": "tsc --noEmit",
     "test": "bun test test",
     "dev": "bun run src/main.ts"
   },
   "dependencies": {
-    "@anoromi/kokoro-rocm-protocol": "workspace:*",
+    "@anoromi/local-ai-tools-protocol": "workspace:*",
     "@effect/platform-bun": "4.0.0-beta.45",
     "effect": "4.0.0-beta.45"
   },
