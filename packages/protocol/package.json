@@ -1,6 +1,6 @@
 {
   "name": "@anoromi/local-ai-tools-protocol",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": false,
   "type": "module",
   "description": "Effect Schema protocol definitions for local-ai-tools clients",

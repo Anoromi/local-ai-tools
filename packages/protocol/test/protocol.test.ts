@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { decodeDaemonLine, decodeSelectParams, decodeSessionLine, decodeSynthesizeParams, eventLine } from "@anoromi/local-ai-tools-protocol"
+import {
+  decodeClassifyParams,
+  decodeDaemonLine,
+  decodeSelectParams,
+  decodeSessionLine,
+  decodeSynthesizeParams,
+  eventLine
+} from "@anoromi/local-ai-tools-protocol"
 
 describe("protocol schemas", () => {
   test("valid synthesize request decodes", () => {
@@ -14,6 +21,32 @@ describe("protocol schemas", () => {
       '{"id":"1","method":"select","params":{"text":"Hello. Bye.","items":[{"question":"What happened?"}]}}'
     )
     expect(request.method).toBe("select")
+  })
+
+  test("valid classify request decodes", () => {
+    const request = decodeSessionLine('{"id":"1","method":"classify","params":{"sentences":["Hello."],"labels":["issue"]}}')
+    expect(request.method).toBe("classify")
+  })
+
+  test("classify params accept shorthand and defaults", () => {
+    const params = decodeClassifyParams({ sentences: ["Hello."], labels: ["issue"] })
+    expect(params.threshold).toBe(0.5)
+    expect(params.hypothesis_template).toBe("This sentence indicates {}.")
+    expect(params.include_all_scores).toBe(false)
+  })
+
+  test("classify params accept object forms", () => {
+    const params = decodeClassifyParams({
+      sentences: [{ id: "s1", text: "Hello." }],
+      labels: [{ id: "issue", label: "issue", threshold: 0.4 }]
+    })
+    expect(params.sentences[0]).toEqual({ id: "s1", text: "Hello." })
+    expect(params.labels[0]).toEqual({ id: "issue", label: "issue", threshold: 0.4 })
+  })
+
+  test("invalid classify thresholds fail", () => {
+    expect(() => decodeClassifyParams({ sentences: ["Hello."], labels: ["issue"], threshold: 2 })).toThrow()
+    expect(() => decodeClassifyParams({ sentences: ["Hello."], labels: [{ label: "issue", threshold: -1 }] })).toThrow()
   })
 
   test("select params default threshold and language", () => {

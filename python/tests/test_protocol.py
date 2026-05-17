@@ -4,7 +4,7 @@ import pytest
 
 import json
 
-from local_ai_tools.protocol import ProtocolError, parse_request, request_line, stream_event, validate_select, validate_synthesize
+from local_ai_tools.protocol import ProtocolError, parse_request, request_line, stream_event, validate_classify, validate_select, validate_synthesize
 
 
 def test_parse_request():
@@ -74,6 +74,39 @@ def test_validate_select_requires_question():
 
 def test_validate_select_accepts_defaults():
     validate_select({"text": "hello", "items": [{"question": "What happened?"}]})
+
+
+def test_validate_classify_requires_sentences():
+    with pytest.raises(ProtocolError):
+        validate_classify({"labels": ["issue"]})
+
+
+def test_validate_classify_requires_labels():
+    with pytest.raises(ProtocolError):
+        validate_classify({"sentences": ["hello"]})
+
+
+def test_validate_classify_rejects_empty_sentence_and_label():
+    with pytest.raises(ProtocolError):
+        validate_classify({"sentences": [""], "labels": ["issue"]})
+    with pytest.raises(ProtocolError):
+        validate_classify({"sentences": ["hello"], "labels": [""]})
+
+
+def test_validate_classify_rejects_invalid_thresholds():
+    with pytest.raises(ProtocolError):
+        validate_classify({"sentences": ["hello"], "labels": ["issue"], "threshold": 2})
+    with pytest.raises(ProtocolError):
+        validate_classify({"sentences": ["hello"], "labels": [{"label": "issue", "threshold": -1}]})
+
+
+def test_validate_classify_accepts_string_and_object_forms():
+    validate_classify(
+        {
+            "sentences": ["hello", {"id": "s2", "text": "bye"}],
+            "labels": ["issue", {"id": "ok", "label": "success", "threshold": 0.4}],
+        }
+    )
 
 
 def test_stream_event_shape():

@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     select.add_argument("--include-all-scores", action="store_true")
     select.add_argument("--socket")
 
+    classify = sub.add_parser("classify")
+    classify.add_argument("--input")
+    classify.add_argument("-o", "--output")
+    classify.add_argument("--include-all-scores", action="store_true")
+    classify.add_argument("--socket")
+
     serve = sub.add_parser("serve")
     serve.add_argument("--foreground", action="store_true")
     serve.add_argument("--socket")
@@ -59,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--model-url")
     setup.add_argument("--config-url")
     setup.add_argument("--voice-url")
-    setup.add_argument("--tool", choices=["kokoro", "selection", "all"], default="all")
+    setup.add_argument("--tool", choices=["kokoro", "selection", "classification", "all"], default="all")
 
     health = sub.add_parser("health")
     health.add_argument("--json", action="store_true")
@@ -108,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
         return say(args)
     if command == "select":
         return select_text(args)
+    if command == "classify":
+        return classify_text(args)
     parser.print_help(sys.stderr)
     return EXIT_USAGE
 
@@ -203,6 +211,53 @@ def select_text(args) -> int:
     if not response.get("ok"):
         error = response.get("error", {})
         print(f"local-ai-tools: {error.get('message', 'selection failed')}", file=sys.stderr)
+        detail = error.get("detail")
+        if detail:
+            print(detail, file=sys.stderr)
+        return EXIT_SYNTHESIS
+    output = json.dumps(response["result"], indent=2) + "\n"
+    if args.output:
+        path = Path(args.output).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(output)
+    else:
+        print(output, end="")
+    return 0
+
+
+def classify_text(args) -> int:
+    try:
+        raw = Path(args.input).expanduser().resolve().read_text() if args.input else sys.stdin.read()
+    except UnicodeDecodeError as exc:
+        print(f"local-ai-tools: failed to read UTF-8 input: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if not raw.strip():
+        print("local-ai-tools: stdin JSON is empty" if not args.input else "local-ai-tools: input JSON is empty", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"local-ai-tools: invalid JSON: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if not isinstance(data, dict):
+        print("local-ai-tools: classify input must be a JSON object", file=sys.stderr)
+        return EXIT_USAGE
+    params = {
+        "sentences": data.get("sentences"),
+        "labels": data.get("labels"),
+        "threshold": data.get("threshold", 0.5),
+        "hypothesis_template": data.get("hypothesis_template", "This sentence indicates {}."),
+        "include_all_scores": bool(data.get("include_all_scores", False) or args.include_all_scores),
+    }
+    try:
+        ensure_daemon(args.socket)
+        response = call(args.socket, "classify", params, timeout=3600)
+    except RuntimeError as exc:
+        print(f"local-ai-tools: {exc}", file=sys.stderr)
+        return EXIT_DAEMON
+    if not response.get("ok"):
+        error = response.get("error", {})
+        print(f"local-ai-tools: {error.get('message', 'classification failed')}", file=sys.stderr)
         detail = error.get("detail")
         if detail:
             print(detail, file=sys.stderr)

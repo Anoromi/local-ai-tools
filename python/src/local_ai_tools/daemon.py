@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .paths import log_path, pid_path, socket_path
-from .protocol import failure, parse_request, stream_event, success, validate_select, validate_synthesize
+from .classification import MODEL_ID as CLASSIFICATION_MODEL_ID
+from .classification import ModernBertClassifier, classification_labels, classification_sentences
+from .protocol import failure, parse_request, stream_event, success, validate_classify, validate_select, validate_synthesize
 from .selection import MODEL_ID, ZillizSelector, selection_items
 
 if TYPE_CHECKING:
@@ -21,8 +23,10 @@ class LocalAiDaemon:
         self.socket = socket
         self.kokoro: KokoroEngine | None = None
         self.selector: ZillizSelector | None = None
+        self.classifier: ModernBertClassifier | None = None
         self.kokoro_lock = asyncio.Lock()
         self.selector_lock = asyncio.Lock()
+        self.classifier_lock = asyncio.Lock()
         self.server: asyncio.AbstractServer | None = None
 
     async def start(self) -> None:
@@ -82,6 +86,18 @@ class LocalAiDaemon:
                 async with self.selector_lock:
                     result = await asyncio.to_thread(self._select, request.params)
                 writer.write(success(request.id, result).encode())
+            elif request.method == "classify":
+                validate_classify(request.params)
+                async with self.classifier_lock:
+                    result = await asyncio.to_thread(self._classify, request.params)
+                writer.write(success(request.id, result).encode())
+            elif request.method == "classify_stream":
+                validate_classify(request.params)
+                writer.write(stream_event(request.id, "started", {}).encode())
+                await writer.drain()
+                async with self.classifier_lock:
+                    result = await asyncio.to_thread(self._classify, request.params)
+                writer.write(success(request.id, result).encode())
             else:
                 writer.write(failure(request.id, "protocol", f"unknown method: {request.method}").encode())
             await writer.drain()
@@ -119,6 +135,17 @@ class LocalAiDaemon:
             include_all_scores=bool(params.get("include_all_scores", False)),
         )
 
+    def _classify(self, params: dict) -> dict:
+        if self.classifier is None:
+            self.classifier = ModernBertClassifier()
+        return self.classifier.classify(
+            sentences=classification_sentences(params["sentences"]),
+            labels=classification_labels(params["labels"]),
+            threshold=float(params.get("threshold", 0.5)),
+            hypothesis_template=(params.get("hypothesis_template") or "This sentence indicates {}.").strip(),
+            include_all_scores=bool(params.get("include_all_scores", False)),
+        )
+
     def _health(self) -> dict:
         return {
             "status": "ok",
@@ -126,6 +153,11 @@ class LocalAiDaemon:
             "tools": {
                 "tts": {"loaded": self.kokoro is not None},
                 "selection": {"loaded": self.selector is not None, "model": self.selector.model_id if self.selector else MODEL_ID},
+                "classification": {
+                    "loaded": self.classifier is not None,
+                    "model": self.classifier.model_id if self.classifier else CLASSIFICATION_MODEL_ID,
+                    "requires_rocm": True,
+                },
             },
         }
 

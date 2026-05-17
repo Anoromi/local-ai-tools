@@ -88,6 +88,55 @@ def validate_select(params: dict[str, Any]) -> None:
         raise ProtocolError("include_all_scores must be a boolean")
 
 
+def validate_classify(params: dict[str, Any]) -> None:
+    sentences = params.get("sentences")
+    if not isinstance(sentences, list) or not sentences:
+        raise ProtocolError("sentences must be a non-empty list")
+    for index, sentence in enumerate(sentences):
+        if isinstance(sentence, str):
+            if not sentence.strip():
+                raise ProtocolError(f"sentences[{index}] must be non-empty")
+            continue
+        if not isinstance(sentence, dict):
+            raise ProtocolError(f"sentences[{index}] must be a string or object")
+        sentence_id = sentence.get("id")
+        if sentence_id is not None and not isinstance(sentence_id, str):
+            raise ProtocolError(f"sentences[{index}].id must be a string")
+        text = sentence.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ProtocolError(f"sentences[{index}].text is required")
+
+    labels = params.get("labels")
+    if not isinstance(labels, list) or not labels:
+        raise ProtocolError("labels must be a non-empty list")
+    for index, label in enumerate(labels):
+        if isinstance(label, str):
+            if not label.strip():
+                raise ProtocolError(f"labels[{index}] must be non-empty")
+            continue
+        if not isinstance(label, dict):
+            raise ProtocolError(f"labels[{index}] must be a string or object")
+        label_id = label.get("id")
+        if label_id is not None and not isinstance(label_id, str):
+            raise ProtocolError(f"labels[{index}].id must be a string")
+        label_text = label.get("label")
+        if not isinstance(label_text, str) or not label_text.strip():
+            raise ProtocolError(f"labels[{index}].label is required")
+        label_threshold = label.get("threshold")
+        if label_threshold is not None and (not isinstance(label_threshold, (int, float)) or label_threshold < 0 or label_threshold > 1):
+            raise ProtocolError(f"labels[{index}].threshold must be between 0 and 1")
+
+    threshold = params.get("threshold", 0.5)
+    if not isinstance(threshold, (int, float)) or threshold < 0 or threshold > 1:
+        raise ProtocolError("threshold must be between 0 and 1")
+    hypothesis_template = params.get("hypothesis_template", "This sentence indicates {}.")
+    if not isinstance(hypothesis_template, str) or not hypothesis_template.strip():
+        raise ProtocolError("hypothesis_template must be a non-empty string")
+    include_all_scores = params.get("include_all_scores", False)
+    if not isinstance(include_all_scores, bool):
+        raise ProtocolError("include_all_scores must be a boolean")
+
+
 def success(request_id: str, result: dict[str, Any]) -> str:
     return json.dumps({"id": request_id, "ok": True, "result": result}, separators=(",", ":")) + "\n"
 

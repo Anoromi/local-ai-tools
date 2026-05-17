@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { callOnce, callStream } from "../protocol/socket-client"
-import { decodeSelectParams, decodeSessionLine, decodeSynthesizeParams } from "@anoromi/local-ai-tools-protocol"
+import { decodeClassifyParams, decodeSelectParams, decodeSessionLine, decodeSynthesizeParams } from "@anoromi/local-ai-tools-protocol"
 import * as Events from "../protocol/session-events"
 import { ensureDaemon } from "../runtime/daemon"
 import { stdinLines } from "../runtime/stdin"
@@ -37,6 +37,10 @@ export function runSession(socket?: string | null): Effect.Effect<void> {
       }
       if (request.method === "select") {
         queue = queue.then(() => handleSelect(request.id, request.params, socket))
+        continue
+      }
+      if (request.method === "classify") {
+        queue = queue.then(() => handleClassify(request.id, request.params, socket))
         continue
       }
       void handleControl(request.id, request.method, socket)
@@ -91,6 +95,38 @@ async function handleSelect(id: string, params: Record<string, unknown>, socket?
         Events.errorEvent(id, {
           stage: "protocol",
           message: "daemon returned stream event for selection request",
+          detail: ""
+        })
+      )
+    }
+  } catch (error) {
+    Events.emitEvent(
+      Events.errorEvent(id, {
+        stage: "session",
+        message: error instanceof Error ? error.message : String(error),
+        detail: ""
+      })
+    )
+  }
+}
+
+async function handleClassify(id: string, params: Record<string, unknown>, socket?: string | null): Promise<void> {
+  try {
+    const classify = decodeClassifyParams(params)
+    await ensureDaemon(socket, {
+      starting: () => Events.emitEvent(Events.daemonStarting(id)),
+      ready: (pid) => Events.emitEvent(Events.daemonReady(id, pid))
+    })
+    const response = await callOnce({ socket }, "classify", classify, 3_600_000)
+    if (response.ok === false) {
+      Events.emitEvent(Events.errorEvent(id, response.error))
+    } else if ("result" in response) {
+      Events.emitEvent(Events.finished(id, response.result))
+    } else {
+      Events.emitEvent(
+        Events.errorEvent(id, {
+          stage: "protocol",
+          message: "daemon returned stream event for classification request",
           detail: ""
         })
       )

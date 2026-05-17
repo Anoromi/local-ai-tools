@@ -114,7 +114,7 @@ class ZillizSelector:
             import torch
 
             inference = torch.inference_mode()
-        except ModuleNotFoundError:
+        except Exception:
             inference = nullcontext()
 
         sentences = sentence_spans(text)

@@ -8,6 +8,7 @@ export const PositiveNumber = Schema.Number.check(Schema.isGreaterThan(0))
 export const NullableTargetWpm = Schema.NullOr(PositiveNumber)
 export const Precision = Schema.Literals(["fp32", "fp16"])
 export const SelectionLanguage = Schema.Literals(["auto", "en", "zh"])
+export const Probability = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(1))
 
 export const HealthParams = Schema.Struct({})
 export const ShutdownParams = Schema.Struct({})
@@ -27,9 +28,7 @@ export const SynthesizeParams = Schema.Struct({
 export const SelectItem = Schema.Struct({
   id: Schema.optional(Schema.String),
   question: Schema.NonEmptyString,
-  threshold: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(1)).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed(0.5))
-  )
+  threshold: Probability.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0.5)))
 })
 
 export const SelectParams = Schema.Struct({
@@ -39,7 +38,41 @@ export const SelectParams = Schema.Struct({
   include_all_scores: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false)))
 })
 
-export const DaemonMethod = Schema.Literals(["health", "shutdown", "synthesize", "synthesize_stream", "select", "select_stream"])
+export const ClassifySentence = Schema.Union([
+  Schema.NonEmptyString,
+  Schema.Struct({
+    id: Schema.optional(Schema.String),
+    text: Schema.NonEmptyString
+  })
+])
+
+export const ClassifyLabel = Schema.Union([
+  Schema.NonEmptyString,
+  Schema.Struct({
+    id: Schema.optional(Schema.String),
+    label: Schema.NonEmptyString,
+    threshold: Schema.optional(Probability)
+  })
+])
+
+export const ClassifyParams = Schema.Struct({
+  sentences: Schema.NonEmptyArray(ClassifySentence),
+  labels: Schema.NonEmptyArray(ClassifyLabel),
+  threshold: Probability.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0.5))),
+  hypothesis_template: Schema.NonEmptyString.pipe(Schema.withDecodingDefaultKey(Effect.succeed("This sentence indicates {}."))),
+  include_all_scores: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false)))
+})
+
+export const DaemonMethod = Schema.Literals([
+  "health",
+  "shutdown",
+  "synthesize",
+  "synthesize_stream",
+  "select",
+  "select_stream",
+  "classify",
+  "classify_stream"
+])
 
 export const DaemonRequest = Schema.Struct({
   id: RequestId,
@@ -83,7 +116,7 @@ export const DaemonStreamEvent = Schema.Struct({
 
 export const DaemonMessage = Schema.Union([DaemonSuccessResponse, DaemonFailureResponse, DaemonStreamEvent])
 
-export const SessionMethod = Schema.Literals(["health", "synthesize", "select", "shutdownDaemon", "exit"])
+export const SessionMethod = Schema.Literals(["health", "synthesize", "select", "classify", "shutdownDaemon", "exit"])
 
 export const SessionRequest = Schema.Struct({
   id: RequestId,
@@ -156,6 +189,9 @@ export const SessionEvent = Schema.Union([
 export type SynthesizeParams = typeof SynthesizeParams.Type
 export type SelectParams = typeof SelectParams.Type
 export type SelectItem = typeof SelectItem.Type
+export type ClassifyParams = typeof ClassifyParams.Type
+export type ClassifySentence = typeof ClassifySentence.Type
+export type ClassifyLabel = typeof ClassifyLabel.Type
 export type DaemonRequest = typeof DaemonRequest.Type
 export type DaemonSuccessResponse = typeof DaemonSuccessResponse.Type
 export type DaemonFailureResponse = typeof DaemonFailureResponse.Type
@@ -170,4 +206,5 @@ export const decodeDaemonMessage = Schema.decodeUnknownSync(DaemonMessage)
 export const decodeSessionRequest = Schema.decodeUnknownSync(SessionRequest)
 export const decodeSynthesizeParams = Schema.decodeUnknownSync(SynthesizeParams)
 export const decodeSelectParams = Schema.decodeUnknownSync(SelectParams)
+export const decodeClassifyParams = Schema.decodeUnknownSync(ClassifyParams)
 export const encodeSessionEvent = Schema.encodeSync(SessionEvent)

@@ -77,6 +77,8 @@ def setup(args) -> dict:
         validate_assets(python, model, config, voices_dir, voice)
     if tool in ("selection", "all"):
         validate_selection_imports(python)
+    if tool in ("classification", "all"):
+        validate_classification_imports(python)
     env_file = env.user_env_file(data_dir)
     write_env(env_file, python, model, config, voices_dir, args.voice)
     os.environ["LOCAL_AI_TOOLS_PYTHON"] = str(python)
@@ -88,6 +90,8 @@ def setup(args) -> dict:
     health_args = type("HealthArgs", (), {"socket": None, "probe_synthesis": tool in ("kokoro", "all"), "keep_probe_output": False})()
     if tool == "selection":
         report = {"status": "ok", "checks": {"selection_python": validate_selection_imports(python)}, "recommendations": []}
+    elif tool == "classification":
+        report = {"status": "ok", "checks": {"classification_python": validate_classification_imports(python)}, "recommendations": []}
     else:
         report = build_report(health_args)
     probe_file.write_text(json.dumps(report, indent=2))
@@ -154,4 +158,9 @@ def validate_assets(python: Path, model: Path, config: Path, voices_dir: Path, v
 
 def validate_selection_imports(python: Path) -> dict:
     run([str(python), "-c", "import torch, transformers, sentencepiece, google.protobuf"])
+    return {"ok": True}
+
+
+def validate_classification_imports(python: Path) -> dict:
+    run([str(python), "-c", "import torch, transformers; assert torch.cuda.is_available(), 'ROCm/CUDA is required for classification'"])
     return {"ok": True}

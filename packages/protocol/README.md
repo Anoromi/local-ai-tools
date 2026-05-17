@@ -54,6 +54,12 @@ Selection requests use one shared text and many question items:
 {"id":"2","method":"select","params":{"text":"The deploy passed. The parser failed.","items":[{"id":"failures","question":"What failed?","threshold":0.5}],"language":"auto","include_all_scores":false}}
 ```
 
+Classification requests use many sentences and many labels:
+
+```json
+{"id":"3","method":"classify","params":{"sentences":[{"id":"s1","text":"The deploy passed."},{"id":"s2","text":"The parser failed."}],"labels":[{"id":"success","label":"success","threshold":0.5},{"id":"issue","label":"issue","threshold":0.5}],"hypothesis_template":"This sentence indicates {}.","include_all_scores":false}}
+```
+
 Common session events:
 
 ```json

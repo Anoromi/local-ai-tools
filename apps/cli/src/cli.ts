@@ -9,6 +9,7 @@ import { runSetup } from "./commands/setup"
 import { runHealth } from "./commands/health"
 import { runSession } from "./commands/session"
 import { parseSelectArgv, runSelect } from "./commands/select"
+import { runClassify } from "./commands/classify"
 import { CliExit, EXIT_USAGE } from "./commands/exit-codes"
 
 const VERSION = "0.1.0"
@@ -76,6 +77,23 @@ const select = Command.make(
     })
 )
 
+const classify = Command.make(
+  "classify",
+  {
+    input: optionalString("input"),
+    output: outputFlag,
+    includeAllScores: Flag.boolean("include-all-scores"),
+    socket: socketFlag
+  },
+  (args) =>
+    runClassify({
+      input: optionValue(args.input),
+      output: optionValue(args.output),
+      includeAllScores: args.includeAllScores,
+      socket: optionValue(args.socket)
+    })
+)
+
 const serve = Command.make(
   "serve",
   {
@@ -97,7 +115,8 @@ const setup = Command.make(
     noDownload: Flag.boolean("no-download"),
     modelUrl: optionalString("model-url"),
     configUrl: optionalString("config-url"),
-    voiceUrl: optionalString("voice-url")
+    voiceUrl: optionalString("voice-url"),
+    tool: Flag.choice("tool", ["kokoro", "selection", "classification", "all"] as const).pipe(Flag.withDefault("all"))
   },
   (args) =>
     runSetup(
@@ -111,7 +130,8 @@ const setup = Command.make(
         noDownload: args.noDownload,
         modelUrl: optionValue(args.modelUrl),
         configUrl: optionValue(args.configUrl),
-        voiceUrl: optionValue(args.voiceUrl)
+        voiceUrl: optionValue(args.voiceUrl),
+        tool: args.tool
       })
     )
 )
@@ -137,7 +157,7 @@ const health = Command.make(
     )
 )
 
-const root = Command.make("local-ai-tools").pipe(Command.withSubcommands([say, select, session, serve, status, stop, setup, health]))
+const root = Command.make("local-ai-tools").pipe(Command.withSubcommands([say, select, classify, session, serve, status, stop, setup, health]))
 
 const defaultSay = Command.make("local-ai-tools", sayConfig, (args) =>
   runSay({
@@ -184,7 +204,7 @@ function selectCommand(argv: readonly string[]) {
   const first = argv[0]
   if (!first) return { command: defaultSay, args: argv }
   if (first === "--help" || first === "-h" || first === "--version" || first === "-v") return { command: root, args: argv }
-  const subcommands = { say, select, session, serve, status, stop, setup, health } as const
+  const subcommands = { say, select, classify, session, serve, status, stop, setup, health } as const
   if (first in subcommands) {
     return { command: subcommands[first as keyof typeof subcommands], args: argv.slice(1) }
   }

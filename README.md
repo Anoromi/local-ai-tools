@@ -4,7 +4,8 @@ Most of this project is ai generated, even the goddamn readme. Don't depend on t
 ## local-ai-tools
 
 `local-ai-tools` is a local AI CLI backed by a Unix-socket daemon. It currently
-supports Kokoro TTS and Zilliz semantic text selection on a ROCm PyTorch stack.
+supports Kokoro TTS, Zilliz semantic text selection, and ModernBERT sentence
+classification on a ROCm PyTorch stack.
 The user-facing CLI is TypeScript/Bun with Effect CLI and Effect Schema. Python
 stays responsible for Kokoro, PyTorch, ROCm setup, health probes, and the daemon.
 The CLI reads text from stdin, auto-starts the daemon if needed, and writes a WAV
@@ -15,7 +16,7 @@ This repository is a Turbo monorepo:
 ```text
 apps/cli                 TypeScript/Bun CLI
 packages/protocol        reusable Effect Schema protocol package
-python                   PyTorch daemon, setup, health, TTS, and selection implementation
+python                   PyTorch daemon, setup, health, TTS, selection, and classification implementation
 ```
 
 The protocol package is named `@anoromi/local-ai-tools-protocol`. It is structured
@@ -49,6 +50,7 @@ local-ai-tools status
 local-ai-tools stop
 printf "Text" | local-ai-tools say -o out.wav
 cat doc.txt | local-ai-tools select --question "What failed?"
+cat classify.json | local-ai-tools classify
 ```
 
 `say` is the default command, so this is equivalent:
@@ -92,6 +94,36 @@ score. Use `--input questions.json` for larger batches:
 
 Add `--include-all-scores` when tuning thresholds.
 
+## Classification
+
+`classify` reads JSON from stdin or `--input` and batches many sentences against
+many labels through `tasksource/ModernBERT-base-nli`. ROCm/CUDA is required;
+there is no CPU fallback.
+
+```bash
+printf '%s\n' '{
+  "sentences": ["The deploy passed.", "The parser failed on invoices."],
+  "labels": ["success", "issue"]
+}' | local-ai-tools classify
+```
+
+Structured labels can set stable ids and per-label thresholds:
+
+```json
+{
+  "sentences": [
+    { "id": "s1", "text": "The deploy passed." },
+    { "id": "s2", "text": "The parser failed on invoices." }
+  ],
+  "labels": [
+    { "id": "success", "label": "success", "threshold": 0.5 },
+    { "id": "issue", "label": "issue", "threshold": 0.5 }
+  ],
+  "hypothesis_template": "This sentence indicates {}.",
+  "include_all_scores": false
+}
+```
+
 ## Session mode
 
 For editor/app integrations, keep one client process alive:
@@ -121,6 +153,13 @@ Selection example:
 
 ```bash
 printf '{"id":"1","method":"select","params":{"text":"The deploy passed. The parser failed.","items":[{"id":"failures","question":"What failed?"}]}}\n{"id":"2","method":"exit","params":{}}\n' \
+  | local-ai-tools session
+```
+
+Classification example:
+
+```bash
+printf '{"id":"1","method":"classify","params":{"sentences":["The deploy passed.","The parser failed."],"labels":["success","issue"]}}\n{"id":"2","method":"exit","params":{}}\n' \
   | local-ai-tools session
 ```
 
