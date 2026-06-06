@@ -30,15 +30,58 @@
       source = builtins.path {
         path = ./.;
         name = "local-ai-tools-source";
+        filter = path: type:
+          let
+            root = toString ./.;
+            rel = pkgs.lib.removePrefix "${root}/" (toString path);
+            base = baseNameOf path;
+          in
+            !(type == "directory" && pkgs.lib.elem base [
+              ".git"
+              ".local-benchmarks"
+              ".pytest_cache"
+              ".turbo"
+              ".venv"
+              "__pycache__"
+              "dist"
+              "node_modules"
+            ])
+            && !(type == "regular" && pkgs.lib.hasSuffix ".pyc" rel)
+            && !(type == "regular" && pkgs.lib.hasSuffix ".tsbuildinfo" rel)
+            && rel != "result";
+      };
+      bunDepsSource = builtins.path {
+        path = ./.;
+        name = "local-ai-tools-bun-deps-source";
+        filter = path: type:
+          let
+            root = toString ./.;
+            rel = pkgs.lib.removePrefix "${root}/" (toString path);
+          in
+            (type == "directory" && pkgs.lib.elem rel [
+              "."
+              "apps"
+              "apps/cli"
+              "apps/playground"
+              "packages"
+              "packages/protocol"
+            ])
+            || (type == "regular" && pkgs.lib.elem rel [
+              "package.json"
+              "bun.lock"
+              "apps/cli/package.json"
+              "apps/playground/package.json"
+              "packages/protocol/package.json"
+            ]);
       };
       bunDeps = pkgs.stdenvNoCC.mkDerivation {
         pname = "local-ai-tools-bun-deps";
         version = "0.1.0";
-        src = source;
+        src = bunDepsSource;
         nativeBuildInputs = [ pkgs.bun ];
         outputHashMode = "recursive";
         outputHashAlgo = "sha256";
-        outputHash = "sha256-R0accrYnHHSynaDgeQ4rYc1M5vA6gQ71RVN0ROGTf4A=";
+        outputHash = "sha256-2BQP5Tti228sWKykeqK4KfWm7923U3i7OQJobkl/t9I=";
         dontFixup = true;
         buildPhase = ''
           runHook preBuild
@@ -59,6 +102,50 @@
             cp -R packages/protocol/node_modules "$out/packages/protocol/node_modules"
           fi
           runHook postInstall
+        '';
+      };
+      updateBunDepsHash = pkgs.writeShellApplication {
+        name = "update-bun-deps-hash";
+        runtimeInputs = [
+          pkgs.gnugrep
+          pkgs.nix
+          pkgs.perl
+        ];
+        text = ''
+          set -euo pipefail
+
+          flake="''${1:-flake.nix}"
+          if [ ! -f "$flake" ]; then
+            echo "error: $flake not found; run from the repository root" >&2
+            exit 1
+          fi
+
+          old_hash="$(grep -E '^[[:space:]]*outputHash = "sha256-' "$flake" | head -n1 | sed -E 's/.*"(sha256-[^"]+)".*/\1/')"
+          if [ -z "$old_hash" ]; then
+            echo "error: could not find bunDeps outputHash in $flake" >&2
+            exit 1
+          fi
+
+          HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" \
+            perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake"
+
+          set +e
+          output="$(nix build .#local-ai-tools-bun-deps --show-trace 2>&1)"
+          status="$?"
+          set -e
+
+          new_hash="$(printf '%s\n' "$output" | grep -E 'got:[[:space:]]+sha256-' | tail -n1 | sed -E 's/.*got:[[:space:]]+(sha256-[^[:space:]]+).*/\1/')"
+          if [ -z "$new_hash" ]; then
+            HASH="$old_hash" \
+              perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake"
+            printf '%s\n' "$output" >&2
+            echo "error: could not determine new bun dependency hash" >&2
+            exit "$status"
+          fi
+
+          HASH="$new_hash" \
+            perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake"
+          echo "updated bunDeps outputHash: $new_hash"
         '';
       };
       local-ai-tools = pkgs.stdenvNoCC.mkDerivation {
@@ -133,6 +220,7 @@
       };
     in {
       packages.${system} = {
+        local-ai-tools-bun-deps = bunDeps;
         local-ai-tools = local-ai-tools;
         default = local-ai-tools;
       };
@@ -141,6 +229,10 @@
         local-ai-tools = {
           type = "app";
           program = "${local-ai-tools}/bin/local-ai-tools";
+        };
+        update-bun-deps-hash = {
+          type = "app";
+          program = "${updateBunDepsHash}/bin/update-bun-deps-hash";
         };
         default = self.apps.${system}.local-ai-tools;
       };

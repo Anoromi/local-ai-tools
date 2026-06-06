@@ -11,7 +11,7 @@ if [[ -z "$current_hash" ]]; then
   exit 1
 fi
 
-perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "'$fake_hash'";/' "$flake_file"
+HASH="$fake_hash" perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake_file"
 
 set +e
 build_output="$(cd "$repo_root" && nix build .#default --no-link 2>&1)"
@@ -20,7 +20,7 @@ set -e
 
 new_hash="$(printf '%s\n' "$build_output" | sed -nE 's/^[[:space:]]*got:[[:space:]]*(sha256-[^[:space:]]+)$/\1/p' | tail -n1)"
 if [[ -z "$new_hash" ]]; then
-  perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "'$current_hash'";/' "$flake_file"
+  HASH="$current_hash" perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake_file"
   printf '%s\n' "$build_output" >&2
   if [[ $build_status -eq 0 ]]; then
     echo "update-bun-deps-hash: build unexpectedly succeeded with fake hash" >&2
@@ -30,5 +30,5 @@ if [[ -z "$new_hash" ]]; then
   exit 1
 fi
 
-perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "'$new_hash'";/' "$flake_file"
+HASH="$new_hash" perl -0pi -e 's/outputHash = "sha256-[^"]+";/outputHash = "$ENV{HASH}";/' "$flake_file"
 echo "$new_hash"

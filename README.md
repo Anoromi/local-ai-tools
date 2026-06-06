@@ -210,7 +210,13 @@ Useful Nix commands:
 ```bash
 nix flake check
 nix run . -- health --json
+scripts/update-bun-deps-hash
 ```
+
+Run `scripts/update-bun-deps-hash` after changing `bun.lock` or workspace
+`package.json` files. `nix flake update` only updates flake inputs in
+`flake.lock`; it does not refresh fixed-output dependency hashes inside
+`flake.nix`.
 
 NixOS flake integration:
 
